@@ -1,0 +1,52 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_DB: test_booking_db
+          POSTGRES_USER: test_postgres
+          POSTGRES_PASSWORD: test_postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DJANGO_SECRET_KEY: test-secret-key
+      DJANGO_DEBUG: True
+      POSTGRES_DB: test_booking_db
+      POSTGRES_USER: test_postgres
+      POSTGRES_PASSWORD: test_postgres
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+
+    steps:
+      - name: Take code
+        uses: actions/checkout@v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5.6.0
+        with:
+          python-version: '3.13.3'
+
+      - name: Install uv
+        uses: pip install uv
+
+      - name: Install dependencies
+        uses: uv pip install --system requirements.txt
+
+      - name: Ruff check
+        uses: ruff check .
+
+      - name: Tests
+        uses: pytest
+
