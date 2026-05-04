@@ -39,14 +39,14 @@ jobs:
           python-version: '3.13.3'
 
       - name: Install uv
-        uses: pip install uv
+        run: pip install uv
 
       - name: Install dependencies
-        uses: uv pip install --system requirements.txt
+        run: uv pip install --system requirements.txt
 
       - name: Ruff check
-        uses: ruff check .
+        run: ruff check .
 
       - name: Tests
-        uses: pytest
+        run: pytest
 
