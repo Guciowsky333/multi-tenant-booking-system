@@ -1,10 +1,12 @@
 # Create your views here.
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.serializers import RegisterSerializer
+from accounts.serializers import LogoutSerializer, RegisterSerializer
 from accounts.services import create_account
 
 
@@ -44,3 +46,48 @@ class CreateAccountAPIView(APIView):
             },
             status=201,
         )
+
+
+class LogoutAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Logout",
+        description="""
+        Add user refresh token to blacklist, after this, user cannot use this refresh token
+        to take access token.
+        
+        Business rules:
+        - Fields refresh_token is required.
+        - Specified refresh_token must be correct.
+        - Authentication required.
+        """,
+        request=LogoutSerializer,
+        responses={
+            201: OpenApiResponse(description="Account logout successfully"),
+            400: OpenApiResponse(description="Validation error/ invalid refresh token"),
+            401: OpenApiResponse(description="Unauthorized"),
+        },
+    )
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = serializer.validated_data["refresh_token"]
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {
+                    "message": "Account logout successfully",
+                },
+                status=200,
+            )
+
+        except TokenError as e:
+            return Response(
+                {
+                    "message": str(e),
+                },
+                status=400,
+            )
