@@ -155,3 +155,5 @@ SPECTACULAR_SETTINGS = {
         }
     },
 }
+
+AUTH_USER_MODEL = "accounts.CustomUser"
