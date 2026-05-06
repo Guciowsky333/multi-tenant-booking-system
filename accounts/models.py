@@ -16,3 +16,8 @@ class CustomUser(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class VerificationCode(models.Model):
+    code = models.CharField(max_length=6, unique=True)
+    email = models.EmailField(unique=True)
