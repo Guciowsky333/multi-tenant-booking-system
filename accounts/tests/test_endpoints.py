@@ -3,22 +3,77 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import CustomUser
+from accounts.models import CustomUser, VerificationCode
 
 
-# Test for /api/accounts/create/
+# Test for /api/accounts/send_verification_email/
 @pytest.mark.django_db
-def test_CreateAccountAPIView():
+def test_SendVerificationEmailView():
     """
-    In this test we check if user with specified data will be created correctly
+    In this test we check whether our endpoint correctly creates a VerificationCode model
+    with provided email.
     """
     client = APIClient()
     body = {"email": "testemail@wp.com", "password": "Test_password", "password_2": "Test_password"}
 
-    response = client.post("/api/accounts/create/", body)
-
+    response = client.post("/api/accounts/send_verification_email/", body)
     assert response.status_code == status.HTTP_201_CREATED
-    assert CustomUser.objects.filter(email=body["email"]).exists()
+    assert VerificationCode.objects.filter(email=body["email"]).exists()
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Invalid email
+        (
+            {"email": "wrong_email", "password": "Test_password", "password_2": "Test_password"},
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        # Account with this email already exist
+        (
+            {"email": "test@test.com", "password": "Test_password", "password_2": "Test_password"},
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        # Password does not have at least one capital letter
+        (
+            {"email": "test_email@.com", "password": "test_password", "password_2": "test_password"},
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        # Password is too short (at least 8 characters)
+        ({"email": "test_email@.com", "password": "Test", "password_2": "Test"}, status.HTTP_400_BAD_REQUEST),
+        # Passwords are not the same
+        (
+            {"email": "test_email@.com", "password": "Test_password_1", "password_2": "Test_password_2"},
+            status.HTTP_400_BAD_REQUEST,
+        ),
+    ],
+)
+def test_SendVerificationEmailView_invalid_payload(payload, expected_status, test_user):
+    """
+    In this test we check all possible invalid payloads
+    """
+    client = APIClient()
+    response = client.post("/api/accounts/send_verification_email/", payload)
+    assert response.status_code == expected_status
+
+
+# Test for /api/accounts/create/
+@pytest.mark.django_db
+def test_CreateAccountAPIView(test_verification_code):
+    """
+    In this test we create a VerificationCode model with provided email.
+    And we check if our endpoint correctly checks if provided code is valid and creates new account.
+    """
+    client = APIClient()
+    body = {"email": "testemail@wp.com", "password": "Test_password", "password_2": "Test_password", "code": "123456"}
+
+    response = client.post("/api/accounts/create/", body)
+    assert response.status_code == status.HTTP_201_CREATED
+
+    created_user = CustomUser.objects.filter(email=body["email"]).first()
+    assert created_user
+    assert created_user.email == body["email"]
+    assert created_user.check_password(body["password"])
 
 
 @pytest.mark.parametrize(
@@ -26,29 +81,43 @@ def test_CreateAccountAPIView():
     [
         # Wrong email form
         (
-            {"email": "wrong_email", "password": "Test_password", "password_2": "Test_password"},
+            {"email": "wrong_email", "password": "Test_password", "password_2": "Test_password", "code": "123456"},
             status.HTTP_400_BAD_REQUEST,
         ),
         # To short password (at least 8 characters)
-        ({"email": "testemail@wp.com", "password": "Test", "password_2": "Test"}, status.HTTP_400_BAD_REQUEST),
+        (
+            {"email": "testemail@wp.com", "password": "Test", "password_2": "Test", "code": "123456"},
+            status.HTTP_400_BAD_REQUEST,
+        ),
         # Missing capital letter in the password
         (
-            {"email": "testemail@wp.com", "password": "test_password", "password_2": "test_password"},
+            {"email": "testemail@wp.com", "password": "test_password", "password_2": "test_password", "code": "123456"},
             status.HTTP_400_BAD_REQUEST,
         ),
         # Password and password_2 are not the same
         (
-            {"email": "testemail@wp.com", "password": "Test_password1", "password_2": "Test_password2"},
+            {
+                "email": "testemail@wp.com",
+                "password": "Test_password1",
+                "password_2": "Test_password2",
+                "code": "123456",
+            },
             status.HTTP_400_BAD_REQUEST,
         ),
         # User with this email already exist
         (
-            {"email": "test@test.com", "password": "Test_password", "password_2": "Test_password"},
+            {"email": "test@test.com", "password": "Test_password", "password_2": "Test_password", "code": "123456"},
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        # Invalid code
+        (
+            {"email": "testemail@wp.com", "password": "Test_password", "password_2": "Test_password", "code": "654321"},
             status.HTTP_400_BAD_REQUEST,
         ),
     ],
 )
-def test_CreateAccountAPIView_invalid_payload(payload, expected_status, test_user):
+def test_CreateAccountAPIView_invalid_payload(payload, expected_status, test_user, test_verification_code):
+
     client = APIClient()
     response = client.post("/api/accounts/create/", payload)
     assert response.status_code == expected_status

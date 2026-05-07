@@ -6,17 +6,25 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.serializers import ChangePasswordSerializer, LogoutSerializer, RegisterSerializer
-from accounts.services import change_password, create_account
+from accounts.serializers import (
+    ChangePasswordSerializer,
+    CreateAccountSerializer,
+    LogoutSerializer,
+    SendVerificationCodeSerializer,
+)
+from accounts.services import change_password, create_account, create_verification_code
 
 
-class CreateAccountAPIView(APIView):
+class SendVerificationEmailView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        summary="Create new account",
+        summary="Sends verification code",
         description="""
-        Create a new account with provided email and password.
+        Sends verification code to specified email and validates passwords.
+        
+        Passwords are validated at this point to avoid sending verification email to the user
+        when the provided passwords are invalid.
         
         Business rules:
         - Fields email, password and password_2 are required.
@@ -26,26 +34,76 @@ class CreateAccountAPIView(APIView):
         - Password must be at least 8 characters long.
         - Password must contain at least one uppercase letter.
         """,
-        request=RegisterSerializer,
+        request=SendVerificationCodeSerializer,
         responses={
-            201: OpenApiResponse(description="Account created successfully"),
+            201: OpenApiResponse(description="Verification code sent."),
+            400: OpenApiResponse(description="Validation error"),
         },
     )
     def post(self, request):
-        serializer = RegisterSerializer(data=request.data)
+        serializer = SendVerificationCodeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         email = serializer.validated_data["email"]
-        password = serializer.validated_data["password"]
-
-        create_account(email, password)
-
+        create_verification_code(email)
         return Response(
             {
-                "message": "Account created successfully",
+                "message": "Verification email with code sent you have 15 minutes to used it",
             },
             status=201,
         )
+
+
+class CreateAccountAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Create new account",
+        description="""
+        Checks whether provided code is valid and creates new account.
+        
+        Important: Users should first send request to the SendVerificationEmailView endpoint to
+        receive verification code in their emails but to prevent situation where users would like to 
+        omit this endpoint we validate the same data here again 
+        
+        
+        Business rules:
+        - Fields email, password, password_2 and code are required.
+        - Code must be valid.
+        - Email must be unique.
+        - Email must be in valid format (validated by Django EmailField).
+        - Fields password and password_2 must be the same.
+        - Password must be at least 8 characters long.
+        - Password must contain at least one uppercase letter.
+        """,
+        request=CreateAccountSerializer,
+        responses={
+            201: OpenApiResponse(description="Account created successfully"),
+            400: OpenApiResponse(description="Validation error/ invalid code "),
+        },
+    )
+    def post(self, request):
+        serializer = CreateAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        password = serializer.validated_data["password"]
+        email = serializer.validated_data["email"]
+        code = serializer.validated_data["code"]
+
+        try:
+            create_account(password, email, code)
+            return Response(
+                {
+                    "message": "Account created successfully",
+                },
+                status=201,
+            )
+        except ValueError as e:
+            return Response(
+                {
+                    "message": str(e),
+                },
+                status=400,
+            )
 
 
 class LogoutAPIView(APIView):

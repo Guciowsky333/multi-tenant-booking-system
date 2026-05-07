@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 from accounts.managers import CustomUserManager
+from accounts.utilis import generate_verification_code
 
 
 class CustomUser(AbstractUser):
@@ -19,5 +20,5 @@ class CustomUser(AbstractUser):
 
 
 class VerificationCode(models.Model):
-    code = models.CharField(max_length=6, unique=True)
+    code = models.CharField(max_length=6, unique=True, default=generate_verification_code)
     email = models.EmailField(unique=True)
