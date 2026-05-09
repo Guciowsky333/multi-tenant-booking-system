@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -13,12 +15,13 @@ def test_SendVerificationEmailView():
     In this test we check whether our endpoint correctly creates a VerificationCode model
     with provided email.
     """
-    client = APIClient()
-    body = {"email": "testemail@wp.com", "password": "Test_password", "password_2": "Test_password"}
+    with patch("accounts.tasks.delete_verification_code.apply_async"):
+        client = APIClient()
+        body = {"email": "testemail@wp.com", "password": "Test_password", "password_2": "Test_password"}
 
-    response = client.post("/api/accounts/send_verification_email/", body)
-    assert response.status_code == status.HTTP_201_CREATED
-    assert VerificationCode.objects.filter(email=body["email"]).exists()
+        response = client.post("/api/accounts/send_verification_email/", body)
+        assert response.status_code == status.HTTP_201_CREATED
+        assert VerificationCode.objects.filter(email=body["email"]).exists()
 
 
 @pytest.mark.parametrize(
@@ -239,15 +242,16 @@ def test_SendResetPasswordCodeAPIView(test_user):
     In this test we check whether our endpoint correctly create VerificationCode
     assigned to provided user's email
     """
-    client = APIClient()
+    with patch("accounts.tasks.delete_verification_code.apply_async"):
+        client = APIClient()
 
-    body = {
-        "email": f"{test_user.email}",
-    }
+        body = {
+            "email": f"{test_user.email}",
+        }
 
-    response = client.post("/api/accounts/send_reset_password_code/", body)
-    assert response.status_code == status.HTTP_201_CREATED
-    assert VerificationCode.objects.filter(email=body["email"]).exists()
+        response = client.post("/api/accounts/send_reset_password_code/", body)
+        assert response.status_code == status.HTTP_201_CREATED
+        assert VerificationCode.objects.filter(email=body["email"]).exists()
 
 
 @pytest.mark.parametrize(
