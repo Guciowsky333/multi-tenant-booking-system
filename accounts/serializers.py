@@ -61,3 +61,22 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("New password must not be the same as old password")
 
         return data
+
+
+class SendPasswordResetCodeSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    new_password = serializers.CharField()
+    new_password_2 = serializers.CharField()
+    code = serializers.CharField(max_length=6)
+
+    def validate(self, data):
+        new_password = data["new_password"]
+        new_password_2 = data["new_password_2"]
+
+        validate_passwords(new_password, new_password_2)
+
+        return data

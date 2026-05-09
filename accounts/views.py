@@ -1,5 +1,6 @@
 # Create your views here.
 from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,9 +11,17 @@ from accounts.serializers import (
     ChangePasswordSerializer,
     CreateAccountSerializer,
     LogoutSerializer,
+    ResetPasswordSerializer,
+    SendPasswordResetCodeSerializer,
     SendVerificationCodeSerializer,
 )
-from accounts.services import change_password, create_account, create_verification_code
+from accounts.services import (
+    change_password,
+    create_account,
+    create_verification_code,
+    reset_password,
+    send_password_reset_code,
+)
 
 
 class SendVerificationEmailView(APIView):
@@ -68,7 +77,7 @@ class CreateAccountAPIView(APIView):
         
         Business rules:
         - Fields email, password, password_2 and code are required.
-        - Code must be valid.
+        - Code must be valid and not expired (valid for 15 minutes).
         - Email must be unique.
         - Email must be in valid format (validated by Django EmailField).
         - Fields password and password_2 must be the same.
@@ -189,6 +198,112 @@ class ChangePasswordAPIView(APIView):
                     "message": "Password changed successfully",
                 },
                 status=200,
+            )
+
+        except ValueError as e:
+            return Response(
+                {
+                    "message": str(e),
+                },
+                status=400,
+            )
+
+
+class SendResetPasswordCodeAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Sends reset password code",
+        description="""
+        Sends a verification code to provided email.
+        The code is valid for 15 minutes.
+        
+        Business rules:
+        - Fields email is required.
+        - Email must be in valid format (validated by Django EmailField)
+        - User with provided email must exist.
+        """,
+        request=SendPasswordResetCodeSerializer,
+        responses={
+            201: OpenApiResponse(description="Verification code sent successfully"),
+            400: OpenApiResponse(description="Validation error"),
+            404: OpenApiResponse(description="User with provided email does not exist"),
+        },
+    )
+    def post(self, request):
+        serializer = SendPasswordResetCodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data["email"]
+
+        try:
+            send_password_reset_code(email)
+            return Response(
+                {
+                    "message": "Reset password code sent successfully",
+                },
+                status=201,
+            )
+
+        except NotFound as e:
+            return Response(
+                {
+                    "message": str(e),
+                },
+                status=404,
+            )
+
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Reset user's password",
+        description="""
+        This endpoint is used when users forget their passwords and want to reset it
+        using a verification code sent to their emails.
+            
+        Important: Before using this endpoint, you must first send a request to
+        SendResetPasswordCodeAPIView to receive a verification code.
+            
+            
+        Business rules:
+        - Fields email, new_password, new_password_2 and code are required.
+        - Email must be in valid format (validated by Django EmailField)
+        - User with provided email must exist.
+        - New password must be at least 8 characters long and contain at least one uppercase letter.
+        - Fields new_password and new_password_2 must be the same.
+        - Code must be valid and not expired (valid for 15 minutes).
+        """,
+        request=ResetPasswordSerializer,
+        responses={
+            200: OpenApiResponse(description="Password has been reset successfully"),
+            400: OpenApiResponse(description="Validation error / Invalid code or email"),
+            404: OpenApiResponse(description="User with provided email does not exist"),
+        },
+    )
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        new_password = serializer.validated_data["new_password"]
+        email = serializer.validated_data["email"]
+        code = serializer.validated_data["code"]
+
+        try:
+            reset_password(new_password, email, code)
+            return Response(
+                {
+                    "message": "Password has been reset successfully",
+                },
+                status=200,
+            )
+
+        except NotFound as e:
+            return Response(
+                {
+                    "message": str(e),
+                },
+                status=404,
             )
 
         except ValueError as e:

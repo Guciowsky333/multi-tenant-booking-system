@@ -231,3 +231,122 @@ def test_ChangePasswordAPIView_requires_authentication():
     client = APIClient()
     response = client.post("/api/accounts/change_password/", {})
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+#  Test for /api/accounts/send_reset_password_code/
+def test_SendResetPasswordCodeAPIView(test_user):
+    """
+    In this test we check whether our endpoint correctly create VerificationCode
+    assigned to provided user's email
+    """
+    client = APIClient()
+
+    body = {
+        "email": f"{test_user.email}",
+    }
+
+    response = client.post("/api/accounts/send_reset_password_code/", body)
+    assert response.status_code == status.HTTP_201_CREATED
+    assert VerificationCode.objects.filter(email=body["email"]).exists()
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Empty email
+        ({"email": ""}, status.HTTP_400_BAD_REQUEST),
+        # Incorrect email format
+        ({"email": "wrong_format"}, status.HTTP_400_BAD_REQUEST),
+        # User with provided email does not exist
+        ({"email": "testemail@wp.com"}, status.HTTP_404_NOT_FOUND),
+    ],
+)
+@pytest.mark.django_db
+def test_SendResetPasswordCodeAPIView_invalid_payload(payload, expected_status):
+    client = APIClient()
+
+    response = client.post("/api/accounts/send_reset_password_code/", payload)
+    assert response.status_code == expected_status
+
+
+# Test for /api/accounts/reset_password/
+def test_ResetPasswordAPIView(test_user):
+    """
+    In this test we create a VerificationCode model assigned to provided user's email
+    and check whether if provide code is valid this endpoint correctly reset user's password to a new one
+    """
+    verification_code = VerificationCode.objects.create(email=test_user.email)
+    client = APIClient()
+
+    body = {
+        "email": f"{test_user.email}",
+        "new_password": "NewPassword",
+        "new_password_2": "NewPassword",
+        "code": f"{verification_code.code}",
+    }
+
+    response = client.post("/api/accounts/reset_password/", body)
+    test_user.refresh_from_db()
+
+    assert response.status_code == status.HTTP_200_OK
+    assert test_user.check_password(body["new_password"])
+
+    # If everything is correct endpoint also should delete VerificationCode
+    assert not VerificationCode.objects.filter(email=body["email"], code=body["code"]).exists()
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # User with provided email does not exist
+        (
+            {
+                "email": "testemail@wp.com",
+                "new_password": "NewPassword",
+                "new_password_2": "NewPassword",
+                "code": "123456",
+            },
+            status.HTTP_404_NOT_FOUND,
+        ),
+        # Too short new password (at least 8 characters)
+        (
+            {"email": "test@test.com", "new_password": "New", "new_password_2": "New", "code": "123456"},
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        # New password must contain at least one uppercase letter
+        (
+            {
+                "email": "test@test.com",
+                "new_password": "newpassword",
+                "new_password_2": "newpassword",
+                "code": "123456",
+            },
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        # Field new_password and new_password_2 are not the same
+        (
+            {
+                "email": "test@test.com",
+                "new_password": "Newpassword1",
+                "new_password_2": "Newpassword2",
+                "code": "123456",
+            },
+            status.HTTP_400_BAD_REQUEST,
+        ),
+        # Invalid code
+        (
+            {
+                "email": "test@test.com",
+                "new_password": "Newpassword",
+                "new_password_2": "Newpassword",
+                "code": "654321",
+            },
+            status.HTTP_400_BAD_REQUEST,
+        ),
+    ],
+)
+def test_ResetPasswordAPIView_invalid_payload(payload, expected_status, test_user):
+    client = APIClient()
+    VerificationCode.objects.create(email=test_user.email, code="123456")
+    response = client.post("/api/accounts/reset_password/", payload)
+    assert response.status_code == expected_status
