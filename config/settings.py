@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     # apps
     "accounts",
+    "restaurants",
 ]
 
 MIDDLEWARE = [
@@ -145,6 +146,7 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Booking System API",
     "DESCRIPTION": "API documentation for Booking System",
     "VERSION": "1.0.0",
+    "COMPONENT_SPLIT_REQUEST": True,
     "SECURITY": [{"jwtAuth": []}],
     "COMPONENTS": {
         "securitySchemes": {
@@ -161,3 +163,6 @@ AUTH_USER_MODEL = "accounts.CustomUser"
 
 CELERY_BROKER_URL = "redis://redis:6379/0"
 CELERY_RESULT_BACKEND = "redis://redis:6379/0"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
