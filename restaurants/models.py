@@ -24,6 +24,7 @@ class Restaurant(models.Model):
     address = models.CharField(max_length=100)
     city = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    reservation_duration_minutes = models.IntegerField(default=90)
 
     @property
     def full_address(self):
