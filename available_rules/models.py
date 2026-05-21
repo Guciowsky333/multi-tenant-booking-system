@@ -19,6 +19,13 @@ class AvailableRule(models.Model):
     opening_time = models.TimeField()
     closing_time = models.TimeField()
 
+    class Meta:
+        """
+        Each restaurant can have only one rule per day of week.
+        """
+
+        constraints = [models.UniqueConstraint(fields=["restaurant", "day_of_week"], name="unique_day_of_week")]
+
 
 class RestaurantTable(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
@@ -47,13 +54,13 @@ class RestaurantException(models.Model):
     is some holiday or restaurant has vacation
     """
 
-    class Type(models.IntegerChoices):
+    class Type(models.TextChoices):
         CLOSED = "closed", "Closed"
-        SPECIAL_HOURS = "special Hours", "Special Hours"
+        SPECIAL_HOURS = "special_hours", "Special_Hours"
 
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     date = models.DateField()
-    type = models.IntegerField(choices=Type.choices)
+    type = models.CharField(max_length=13, choices=Type.choices)
 
     opening_time = models.TimeField(null=True, blank=True)
     closing_time = models.TimeField(null=True, blank=True)
