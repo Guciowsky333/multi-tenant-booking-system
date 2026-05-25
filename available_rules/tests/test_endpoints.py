@@ -3,7 +3,7 @@ from datetime import time
 import pytest
 from rest_framework.test import APIClient
 
-from available_rules.models import AvailableRule
+from available_rules.models import AvailableRule, RestaurantTable
 
 # test for api/available_rules/
 
@@ -38,6 +38,8 @@ def test_AvailableRuleViewSet_post(test_owner, test_restaurant):
         ({"restaurant": 1, "day_of_week": 1, "opening_time": "8:00", "closing_time": ""}, 400),
         # Incorrect format opening_time or closing_time
         ({"restaurant": 1, "day_of_week": 1, "opening_time": "8:00", "closing_time": "incorrect"}, 400),
+        # Closing time after opening_time
+        ({"restaurant": 1, "day_of_week": 1, "opening_time": "8:00", "closing_time": "6:00"}, 400),
         # Incorrect day_of_week allowed 1-7 from Monday=1 to Sunday=7
         ({"restaurant": 1, "day_of_week": 8, "opening_time": "8:00", "closing_time": "22:00"}, 400),
         # Not exist restaurant
@@ -189,6 +191,8 @@ def test_AvailableRuleViewSet_put(test_owner, test_available_rule):
         ({"restaurant": 1, "day_of_week": 1, "opening_time": "8:00", "closing_time": ""}, 400),
         # Incorrect format opening_time or closing_time
         ({"restaurant": 1, "day_of_week": 1, "opening_time": "8:00", "closing_time": "incorrect"}, 400),
+        # Closing time after opening_time
+        ({"restaurant": 1, "day_of_week": 1, "opening_time": "8:00", "closing_time": "6:00"}, 400),
         # Incorrect day_of_week allowed 1-7 from Monday=1 to Sunday=7
         ({"restaurant": 1, "day_of_week": 8, "opening_time": "8:00", "closing_time": "22:00"}, 400),
         # Not exist restaurant
@@ -291,3 +295,167 @@ def test_AvailableRuleViewSet_delete_requires_authentication():
     client = APIClient()
     response = client.delete("/api/available_rules/")
     assert response.status_code == 401
+
+
+# test for api/available_rules/restaurant_table/
+
+
+# Post method
+def test_RestaurantTableViewSet_post(test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "restaurant": test_restaurant.id,
+        "table_number": 2,
+        "seats": 4,
+    }
+    response = client.post("/api/available_rules/restaurant_table/", body)
+    assert response.status_code == 201
+    assert RestaurantTable.objects.filter(restaurant=body["restaurant"], table_number=body["table_number"]).exists()
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Missing restaurant
+        ({"restaurant": "", "table_number": "A1", "seats": 4}, 400),
+        # Missing table_number
+        ({"restaurant": 1, "table_number": "", "seats": 4}, 400),
+        # Missing seats
+        ({"restaurant": 1, "table_number": "A1", "seats": ""}, 400),
+        # Restaurant not exist
+        ({"restaurant": 2, "table_number": "A1", "seats": 4}, 400),
+        # table numer is too long max length = 10
+        ({"restaurant": 1, "table_number": "12345678910", "seats": 4}, 400),
+        # Seats are not number
+        ({"restaurant": 1, "table_number": "A1", "seats": "not_number"}, 400),
+        # Seats are smaller than 1
+        ({"restaurant": 1, "table_number": "A1", "seats": 0}, 400),
+    ],
+)
+def test_RestaurantTableViewSet_post_invalid_date(payload, expected_status, test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.post("/api/available_rules/restaurant_table/", payload)
+    assert response.status_code == expected_status
+
+
+def test_RestaurantTableViewSet_post_unique_table_number(test_owner, test_restaurant):
+    """
+    Filed table_number has to be unique in the restaurant section.
+    In this test we create a restaurant_table with table_number = A1 in test_restaurant, and then we try
+    creates another table with the same table_number in this restaurant.
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    RestaurantTable.objects.create(
+        restaurant=test_restaurant,
+        table_number="A1",
+        seats=4,
+    )
+
+    body = {
+        "restaurant": test_restaurant.id,
+        "table_number": "A1",
+        "seats": 3,
+    }
+    response = client.post("/api/available_rules/restaurant_table/", body)
+    assert response.status_code == 400
+
+
+def test_RestaurantTableViewSet_post_not_owner(test_user, test_restaurant):
+    """
+    User in this test are not owner of provided restaurant.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    body = {
+        "restaurant": test_restaurant.id,
+        "table_number": "A1",
+        "seats": 4,
+    }
+    response = client.post("/api/available_rules/restaurant_table/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantTableViewSet_post_requires_authentication():
+    client = APIClient()
+    response = client.post("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
+
+
+# Get method
+def test_RestaurantTableViewSet_get(test_owner, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get("/api/available_rules/restaurant_table/")
+    assert response.status_code == 200
+    assert len(response.data) == 1
+
+
+def test_RestaurantTableViewSet_get_details(test_owner, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantTableViewSet_get_returns_404_for_non_owner(test_user, test_restaurant_table):
+    """
+    This endpoint should not return any tabel for test_user because test_user has not any tabel
+    test_restaurant_table has restaurant that belong to test_owner.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_get_not_exist_table(test_owner, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get("/api/available_rules/restaurant_table/not_exist_table/")
+    assert response.status_code == 404
+
+
+# Put method
+def test_RestaurantTableViewSet_put(test_owner, test_restaurant_table):
+
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "restaurant": test_restaurant_table.restaurant.id,
+        "table_number": "A11",
+        "seats": 3,
+    }
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", body)
+    test_restaurant_table.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_table.table_number == body["table_number"]
+    assert test_restaurant_table.seats == body["seats"]
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Missing restaurant
+        ({"restaurant": "", "table_number": "A1", "seats": 4}, 400),
+        # Missing table_number
+        ({"restaurant": 1, "table_number": "", "seats": 4}, 400),
+        # Missing seats
+        ({"restaurant": 1, "table_number": "A1", "seats": ""}, 400),
+        # Restaurant not exist
+        ({"restaurant": 2, "table_number": "A1", "seats": 4}, 400),
+        # table numer is too long max length = 10
+        ({"restaurant": 1, "table_number": "12345678910", "seats": 4}, 400),
+        # Seats are not number
+        ({"restaurant": 1, "table_number": "A1", "seats": "not_number"}, 400),
+        # Seats are smaller than 1
+        ({"restaurant": 1, "table_number": "A1", "seats": 0}, 400),
+    ],
+)
+def test_RestaurantTableViewSet_put_invalid_date(payload, expected_status, test_owner, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", payload)
+    assert response.status_code == expected_status

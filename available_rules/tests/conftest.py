@@ -1,7 +1,7 @@
 import pytest
 
 from accounts.models import CustomUser
-from available_rules.models import AvailableRule
+from available_rules.models import AvailableRule, RestaurantTable
 from restaurants.models import CuisineType, Restaurant
 
 
@@ -40,3 +40,8 @@ def test_available_rule(db, test_restaurant, test_cuisine_type):
         opening_time="8:00",
         closing_time="22:00",
     )
+
+
+@pytest.fixture
+def test_restaurant_table(db, test_restaurant):
+    return RestaurantTable.objects.create(restaurant=test_restaurant, table_number="A10", seats=4)

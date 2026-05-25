@@ -1,4 +1,5 @@
 # Create your models here.
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from restaurants.models import Restaurant
@@ -30,7 +31,9 @@ class AvailableRule(models.Model):
 class RestaurantTable(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     table_number = models.CharField(max_length=10)
-    seats = models.PositiveIntegerField()
+    seats = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+    )
 
     class Meta:
         """
