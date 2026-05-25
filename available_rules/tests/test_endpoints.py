@@ -459,3 +459,83 @@ def test_RestaurantTableViewSet_put_invalid_date(payload, expected_status, test_
     client.force_authenticate(test_owner)
     response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", payload)
     assert response.status_code == expected_status
+
+
+def test_RestaurantTableViewSet_put_returns_404_for_not_owner(test_user, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_put_not_found(test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.put("/api/available_rules/restaurant_table/not_exist_table/")
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_put_requires_authentication():
+    client = APIClient()
+    response = client.put("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
+
+
+# Patch method
+def test_RestaurantTableViewSet_patch(test_owner, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {"seats": 3}
+    response = client.patch(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", body)
+    test_restaurant_table.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_table.seats == body["seats"]
+
+
+def test_RestaurantTableViewSet_patch_returns_404_for_not_owner(test_user, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.patch(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_patch_not_found(test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.patch("/api/available_rules/restaurant_table/not_exist_table/")
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_patch_requires_authentication():
+    client = APIClient()
+    response = client.patch("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
+
+
+# Delete method
+def test_RestaurantTableViewSet_delete(test_owner, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 204
+    assert not RestaurantTable.objects.filter(id=test_restaurant_table.id).exists()
+
+
+def test_RestaurantTableViewSet_delete_not_found(test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete("/api/available_rules/restaurant_table/not_exist_table/")
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_delete_returns_404_for_not_owner(test_user, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.delete(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_requires_authentication():
+    client = APIClient()
+    response = client.get("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
