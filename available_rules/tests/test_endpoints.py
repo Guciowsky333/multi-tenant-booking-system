@@ -3,7 +3,7 @@ from datetime import time
 import pytest
 from rest_framework.test import APIClient
 
-from available_rules.models import AvailableRule, RestaurantTable
+from available_rules.models import AvailableRule, RestaurantBreak, RestaurantTable
 
 # test for api/available_rules/
 
@@ -538,4 +538,209 @@ def test_RestaurantTableViewSet_delete_returns_404_for_not_owner(test_user, test
 def test_RestaurantTableViewSet_requires_authentication():
     client = APIClient()
     response = client.get("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
+
+
+# test for api/available_rules/restaurant_break/
+
+
+def test_RestaurantBreakViewSet_post(test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+
+    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25"}
+
+    response = client.post("/api/available_rules/restaurant_break/", body)
+    assert response.status_code == 201
+    assert RestaurantBreak.objects.filter(restaurant=test_restaurant).exists()
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Missing restaurant
+        ({"restaurant": "", "start": "10:00", "end": "10:25"}, 400),
+        # Missing start
+        ({"restaurant": 1, "start": "", "end": "10:25"}, 400),
+        # Missing end
+        ({"restaurant": 1, "start": "10:00", "end": ""}, 400),
+        # Restaurant does not exist
+        ({"restaurant": 2, "start": "10:00", "end": "10:25"}, 400),
+        # Incorrect data format start or end
+        ({"restaurant": 1, "start": "10:00", "end": "wrong_format"}, 400),
+        # Start before end
+        ({"restaurant": 1, "start": "10:00", "end": "9:59"}, 400),
+    ],
+)
+def test_RestaurantBreakViewSet_post_invalid_data(payload, expected_status, test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.post("/api/available_rules/restaurant_break/", payload)
+    assert response.status_code == expected_status
+
+
+def test_RestaurantBreakViewSet_post_not_restaurant_owner(test_user, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25"}
+    response = client.post("/api/available_rules/restaurant_break/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantBreakViewSet_post_requires_authentication():
+    client = APIClient()
+    response = client.post("/api/available_rules/restaurant_break/")
+    assert response.status_code == 401
+
+
+# Get method
+def test_RestaurantBreakViewSet_get(test_owner, test_restaurant_break):
+    """
+    Test_owner has only 1 restaurant_break model in his restaurant
+    so our endpoint should return only 1 restaurant_break model
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get("/api/available_rules/restaurant_break/")
+    assert response.status_code == 200
+    assert len(response.data) == 1
+
+
+def test_RestaurantBreakViewSet_get_details(test_owner, test_restaurant_break):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantBreakViewSet_get_returns_404_for_not_owner(test_user, test_restaurant_break):
+    """
+    Users should only see restaurant_break models that belong to them.
+    The restaurant in test_restaurant_break belongs to test_owner, not test_user,
+    so the endpoint should return 404.
+    """
+
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.get(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantBreakViewSet_get_requires_authentication():
+    client = APIClient()
+    response = client.get("/api/available_rules/restaurant_break/")
+    assert response.status_code == 401
+
+
+# Put method
+def test_RestaurantBreakViewSet_put(test_owner, test_restaurant_break):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25"}
+    response = client.put(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
+    test_restaurant_break.refresh_from_db()
+    assert response.status_code == 200
+
+    # Checks if data in our restaurant_break has been changed
+    assert test_restaurant_break.start == time(15, 0)
+    assert test_restaurant_break.end == time(16, 25)
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Missing restaurant
+        ({"restaurant": "", "start": "10:00", "end": "10:25"}, 400),
+        # Missing start
+        ({"restaurant": 1, "start": "", "end": "10:25"}, 400),
+        # Missing end
+        ({"restaurant": 1, "start": "10:00", "end": ""}, 400),
+        # Restaurant does not exist
+        ({"restaurant": 2, "start": "10:00", "end": "10:25"}, 400),
+        # Incorrect data format start or end
+        ({"restaurant": 1, "start": "10:00", "end": "wrong_format"}, 400),
+        # Start before end
+        ({"restaurant": 1, "start": "10:00", "end": "9:59"}, 400),
+    ],
+)
+def test_RestaurantBreakViewSet_put_invalid_data(
+    payload, expected_status, test_owner, test_restaurant, test_restaurant_break
+):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.put(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", payload)
+    assert response.status_code == expected_status
+
+
+def test_RestaurantBreakViewSet_put_returns_404_for_not_owner(test_user, test_restaurant_break):
+    """
+    test_user is not owner of restaurant in test_restaurant_break.
+    Endpoint should return 404 for test_user.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.put(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", {})
+    assert response.status_code == 404
+
+
+def test_RestaurantBreakViewSet_put_requires_authentication():
+    client = APIClient()
+    response = client.put("/api/available_rules/restaurant_break/")
+    assert response.status_code == 401
+
+
+# Patch method
+
+
+def test_RestaurantBreakViewSet_patch(test_owner, test_restaurant_break):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {"start": "15:00", "end": "15:25"}
+    response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
+    test_restaurant_break.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_break.start == time(15, 0)
+    assert test_restaurant_break.end == time(15, 25)
+
+
+def test_RestaurantBreakViewSet_patch_start_before_end(test_owner, test_restaurant_break):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {"start": "15:00", "end": "14:59"}
+    response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
+    assert response.status_code == 400
+
+
+def test_RestaurantBreakViewSet_patch_returns_404_for_not_owner(test_user, test_restaurant_break):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", {})
+    assert response.status_code == 404
+
+
+def test_RestaurantBreakViewSet_patch_requires_authentication():
+    client = APIClient()
+    response = client.patch("/api/available_rules/restaurant_break/")
+    assert response.status_code == 401
+
+
+# Delete method
+def test_RestaurantBreakViewSet_delete(test_owner, test_restaurant_break):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/")
+    assert response.status_code == 204
+    assert not RestaurantBreak.objects.filter(id=test_restaurant_break.id).exists()
+
+
+def test_RestaurantBreakViewSet_delete_returns_404_for_not_owner(test_user, test_restaurant_break):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.delete(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantBreakViewSet_delete_requires_authentication():
+    client = APIClient()
+    response = client.delete("/api/available_rules/restaurant_break/")
     assert response.status_code == 401

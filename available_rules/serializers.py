@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from available_rules.models import AvailableRule, RestaurantTable
+from available_rules.models import AvailableRule, RestaurantBreak, RestaurantTable
 
 
 class AvailableRuleSerializer(serializers.ModelSerializer):
@@ -33,3 +33,23 @@ class RestaurantTableSerializer(serializers.ModelSerializer):
         model = RestaurantTable
         fields = ["restaurant", "restaurant_name", "table_number", "seats"]
         read_only_fields = ["restaurant_name"]
+
+
+class RestaurantBreakSerializer(serializers.ModelSerializer):
+    restaurant_name = serializers.SerializerMethodField()
+
+    def get_restaurant_name(self, obj):
+        return obj.restaurant.name
+
+    class Meta:
+        model = RestaurantBreak
+        fields = ["restaurant", "restaurant_name", "start", "end"]
+        read_only_fields = ["restaurant_name"]
+
+    def validate(self, data):
+        start = data.get("start")
+        end = data.get("end")
+        if start and end:
+            if end <= start:
+                raise serializers.ValidationError("Start time must be before end time")
+        return data
