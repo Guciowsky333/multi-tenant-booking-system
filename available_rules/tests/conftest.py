@@ -1,7 +1,10 @@
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 
 from accounts.models import CustomUser
-from available_rules.models import AvailableRule, RestaurantBreak, RestaurantTable
+from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
 from restaurants.models import CuisineType, Restaurant
 
 
@@ -50,3 +53,13 @@ def test_restaurant_table(db, test_restaurant):
 @pytest.fixture
 def test_restaurant_break(db, test_restaurant):
     return RestaurantBreak.objects.create(restaurant=test_restaurant, start="9:30", end="10:00")
+
+
+@pytest.fixture
+def test_restaurant_exception(db, test_restaurant):
+    tomorrow = (timezone.now() + timedelta(days=1)).date().isoformat()
+    return RestaurantException.objects.create(
+        restaurant=test_restaurant,
+        date=tomorrow,
+        type="closed",
+    )

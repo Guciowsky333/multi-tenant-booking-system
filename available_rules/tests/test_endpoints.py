@@ -1,9 +1,10 @@
-from datetime import time
+from datetime import datetime, time, timedelta
 
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
-from available_rules.models import AvailableRule, RestaurantBreak, RestaurantTable
+from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
 
 # test for api/available_rules/
 
@@ -541,7 +542,7 @@ def test_RestaurantTableViewSet_requires_authentication():
     assert response.status_code == 401
 
 
-# test for api/available_rules/restaurant_break/
+# Tests for /api/available_rules/restaurant_break/
 
 
 def test_RestaurantBreakViewSet_post(test_owner, test_restaurant):
@@ -743,4 +744,261 @@ def test_RestaurantBreakViewSet_delete_returns_404_for_not_owner(test_user, test
 def test_RestaurantBreakViewSet_delete_requires_authentication():
     client = APIClient()
     response = client.delete("/api/available_rules/restaurant_break/")
+    assert response.status_code == 401
+
+
+# Tests for /api/available_rules/restaurant_exception/
+
+
+# Post method
+def test_RestaurantExceptionViewSet_post_type_closed(test_owner, test_restaurant):
+    """
+    In this test we create a RestaurantException model with type = closed so fields
+    opening_time and closing_time must be empty.
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    tomorrow = (timezone.now() + timedelta(days=1)).date().isoformat()
+    body = {
+        "restaurant": test_restaurant.id,
+        "date": tomorrow,
+        "type": "closed",
+    }
+    response = client.post("/api/available_rules/restaurant_exception/", body)
+    assert response.status_code == 201
+    assert RestaurantException.objects.filter(restaurant=test_restaurant).exists()
+
+
+def test_RestaurantExceptionViewSet_post_type_special_hours(test_owner, test_restaurant):
+    """
+    In this test we create a RestaurantException model with type = special_hours so fields
+    opening_time and closing_time are required.
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    tomorrow = (timezone.now() + timedelta(days=1)).date().isoformat()
+    body = {
+        "restaurant": test_restaurant.id,
+        "date": tomorrow,
+        "type": "special_hours",
+        "opening_time": "8:00",
+        "closing_time": "22:00",
+    }
+    response = client.post("/api/available_rules/restaurant_exception/", body)
+    assert response.status_code == 201
+    assert RestaurantException.objects.filter(restaurant=test_restaurant).exists()
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Missing restaurant
+        ({"restaurant": "", "date": "3000-05-26", "type": "closed"}, 400),
+        # Missing date
+        ({"restaurant": 1, "date": "", "type": "closed"}, 400),
+        # Missing type
+        ({"restaurant": 1, "date": "3000-05-26", "type": ""}, 400),
+        # Not exist restaurant
+        ({"restaurant": 2, "date": "3000-05-26", "type": "closed"}, 400),
+        # Wrong date formant
+        ({"restaurant": 1, "date": "wrong_format", "type": "closed"}, 400),
+        # Date is in the past (current data = 2026-05-26)
+        ({"restaurant": 1, "date": "1996-05-26", "type": "closed"}, 400),
+        # Wrong type allowed (closed, special_hours)
+        ({"restaurant": 1, "date": "3000-05-26", "type": "wrong_type"}, 400),
+        # Type = closed and fields opening_time and closing_time are not empty
+        (
+            {"restaurant": 1, "date": "3000-05-26", "type": "closed", "opening_time": "8:00", "closing_time": "22:00"},
+            400,
+        ),
+        # Closing_time before opening_time
+        (
+            {
+                "restaurant": 1,
+                "date": "3000-05-26",
+                "type": "special_hours",
+                "opening_time": "22:00",
+                "closing_time": "8:00",
+            },
+            400,
+        ),
+        # Type = special_hours and fields opening_time and closing_time are empty
+        ({"restaurant": 1, "date": "3000-05-26", "type": "special_hours"}, 400),
+    ],
+)
+def test_RestaurantExceptionViewSet_post_invalid_data(payload, expected_status, test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.post("/api/available_rules/restaurant_exception/", payload)
+    assert response.status_code == expected_status
+
+
+def test_RestaurantExceptionViewSet_post_not_restaurant_owner(test_user, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    body = {
+        "restaurant": test_restaurant.id,
+        "date": "3000-05-26",
+        "type": "closed",
+    }
+    response = client.post("/api/available_rules/restaurant_exception/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantExceptionViewSet_post_requires_authentication():
+    client = APIClient()
+    response = client.post("/api/available_rules/restaurant_exception/")
+    assert response.status_code == 401
+
+
+# Get method
+def test_RestaurantExceptionViewSet_get(test_owner, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get("/api/available_rules/restaurant_exception/")
+    assert response.status_code == 200
+    assert len(response.data) == 1
+
+
+def test_RestaurantExceptionViewSet_get_details(test_owner, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantExceptionViewSet_get_returns_404_for_not_owner(test_user, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantExceptionViewSet_get_requires_authentication():
+    client = APIClient()
+    response = client.get("/api/available_rules/restaurant_exception/")
+    assert response.status_code == 401
+
+
+# Put method
+def test_RestaurantExceptionViewSet_put(test_owner, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "restaurant": test_restaurant_exception.restaurant.id,
+        "date": "3001-05-26",
+        "type": "closed",
+    }
+
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    test_restaurant_exception.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_exception.date == datetime.strptime(body["date"], "%Y-%m-%d").date()
+
+
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # Missing restaurant
+        ({"restaurant": "", "date": "3000-05-26", "type": "closed"}, 400),
+        # Missing date
+        ({"restaurant": 1, "date": "", "type": "closed"}, 400),
+        # Missing type
+        ({"restaurant": 1, "date": "3000-05-26", "type": ""}, 400),
+        # Not exist restaurant
+        ({"restaurant": 2, "date": "3000-05-26", "type": "closed"}, 400),
+        # Wrong date formant
+        ({"restaurant": 1, "date": "wrong_format", "type": "closed"}, 400),
+        # Date is in the past (current data = 2026-05-26)
+        ({"restaurant": 1, "date": "1996-05-26", "type": "closed"}, 400),
+        # Wrong type allowed (closed, special_hours)
+        ({"restaurant": 1, "date": "3000-05-26", "type": "wrong_type"}, 400),
+        # Type = closed and fields opening_time and closing_time are not empty
+        (
+            {"restaurant": 1, "date": "3000-05-26", "type": "closed", "opening_time": "8:00", "closing_time": "22:00"},
+            400,
+        ),
+        # Closing_time before opening_time
+        (
+            {
+                "restaurant": 1,
+                "date": "3000-05-26",
+                "type": "special_hours",
+                "opening_time": "22:00",
+                "closing_time": "8:00",
+            },
+            400,
+        ),
+        # Type = special_hours and fields opening_time and closing_time are empty
+        ({"restaurant": 1, "date": "3000-05-26", "type": "special_hours"}, 400),
+    ],
+)
+def test_RestaurantExceptionViewSet_put_invalid_data(
+    payload, expected_status, test_owner, test_restaurant, test_restaurant_exception
+):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", payload)
+    assert response.status_code == expected_status
+
+
+def test_RestaurantExceptionViewSet_put_returns_404_for_not_owner(test_user, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
+    assert response.status_code == 404
+
+
+def test_RestaurantExceptionViewSet_put_requires_authentication(test_restaurant_exception):
+    client = APIClient()
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
+    assert response.status_code == 401
+
+
+# Patch method
+def test_RestaurantExceptionViewSet_patch(test_owner, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+
+    body = {
+        "date": "3005-05-26",
+    }
+    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    test_restaurant_exception.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_exception.date == datetime.strptime(body["date"], "%Y-%m-%d").date()
+
+
+def test_RestaurantExceptionViewSet_patch_returns_404_for_not_owner(test_user, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
+    assert response.status_code == 404
+
+
+def test_RestaurantExceptionViewSet_patch_requires_authentication(test_restaurant_exception):
+    client = APIClient()
+    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
+    assert response.status_code == 401
+
+
+# Delete method
+def test_RestaurantExceptionViewSet_delete(test_owner, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 204
+    assert not RestaurantException.objects.filter(id=test_restaurant_exception.id).exists()
+
+
+def test_RestaurantExceptionViewSet_delete_returns_404_for_not_owner(test_user, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.delete(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 404
+
+
+def test_RestaurantExceptionViewSet_delete_requires_authentication(test_restaurant_exception):
+    client = APIClient()
+    response = client.delete(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
     assert response.status_code == 401
