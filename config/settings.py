@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     # apps
     "accounts",
     "restaurants",
+    "available_rules",
 ]
 
 MIDDLEWARE = [
