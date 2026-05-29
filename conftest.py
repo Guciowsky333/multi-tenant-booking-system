@@ -1,0 +1,41 @@
+import pytest
+
+from accounts.models import CustomUser, VerificationCode
+from restaurants.models import CuisineType, Restaurant
+
+
+@pytest.fixture
+def test_owner(db):
+    return CustomUser.objects.create_user(id=1, email="test@test.com", password="Test_password")
+
+
+@pytest.fixture
+def test_user(db):
+    return CustomUser.objects.create_user(id=2, email="test@test1.com", password="Test_password")
+
+
+@pytest.fixture
+def test_user_1(db):
+    return CustomUser.objects.create_user(id=3, email="test@test2.com", password="Test_password")
+
+
+@pytest.fixture
+def test_verification_code(db):
+    return VerificationCode.objects.create(email="test@test1.com", code="123456")
+
+
+@pytest.fixture
+def test_cuisine_type(db):
+    return CuisineType.objects.create(name="test_cuisine_type")
+
+
+@pytest.fixture
+def test_restaurant(db, test_owner, test_cuisine_type):
+    return Restaurant.objects.create(
+        id=1,
+        name="test_restaurant",
+        address="test_address",
+        city="test_city",
+        owner=test_owner,
+        cuisine_type=test_cuisine_type,
+    )
