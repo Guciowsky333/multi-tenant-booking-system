@@ -50,7 +50,7 @@ INSTALLED_APPS = [
     "accounts",
     "restaurants",
     "available_rules",
-    "member_ship",
+    "memberships",
 ]
 
 MIDDLEWARE = [
