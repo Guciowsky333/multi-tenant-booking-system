@@ -29,6 +29,9 @@ class MemberShipSerializer(serializers.ModelSerializer):
         restaurant = data["restaurant"]
         user = self.context["user"]
 
+        if MemberShip.objects.filter(user=user, restaurant=restaurant).exists():
+            raise serializers.ValidationError("User with provided email already has membership in this restaurant")
+
         if restaurant.owner == user:
             raise serializers.ValidationError("Owner cannot be a member of their own restaurant.")
         return data

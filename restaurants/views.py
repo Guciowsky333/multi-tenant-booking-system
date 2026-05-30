@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from restaurants.models import CuisineType, Restaurant
-from restaurants.permisions import IsRestaurantOwner
+from restaurants.permisions import IsRestaurantManagerOrOwner
 from restaurants.serializers import CuisineTypeSerializer, RestaurantSerializer
 
 
@@ -33,7 +33,6 @@ class AllCuisinesTypeView(APIView):
 class RestaurantViewSet(viewsets.ModelViewSet):
     queryset = Restaurant.objects.all()
     serializer_class = RestaurantSerializer
-    permission_classes = [IsAuthenticated]
     parser_classes = [FormParser, MultiPartParser]
 
     def get_permissions(self):
@@ -42,7 +41,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         Create or get all restaurants is allowed by any log in users
         """
         if self.action in ["update", "partial_update", "destroy"]:
-            return [IsAuthenticated(), IsRestaurantOwner()]
+            return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
