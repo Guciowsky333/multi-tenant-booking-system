@@ -67,6 +67,14 @@ def test_RestaurantViewSet_get(test_user, test_cuisine_type):
     assert len(response.data) == 2
 
 
+def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_user_1)
+    response = client.get(f"/api/restaurants/?city={test_restaurant.city}")
+    assert response.status_code == 200
+    assert len(response.data) == 1
+
+
 def test_RestaurantViewSet_get_requires_authentication():
     client = APIClient()
     response = client.get("/api/restaurants/")
