@@ -60,6 +60,23 @@ def test_MemberShipViewSet_post_not_owner(test_user, test_restaurant):
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
+def test_MemberShipViewSet_post_unique_user(test_owner, test_membership):
+    """
+    Each user can have only one membership model with one restaurant.In this test
+    we try creates another membership model with the same user, like in test_membership
+    and with the same restaurant.Endpoint should return error 400
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "restaurant": test_membership.restaurant.id,
+        "email": test_membership.user.email,
+        "role": "manager",
+    }
+    response = client.post("/api/memberships/", body)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 def test_MemberShipViewSet_post_requires_authentication():
     client = APIClient()
     response = client.post("/api/memberships/", {})

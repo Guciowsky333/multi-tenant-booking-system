@@ -1,22 +1,28 @@
 import pytest
 
 from accounts.models import CustomUser, VerificationCode
+from memberships.models import MemberShip
 from restaurants.models import CuisineType, Restaurant
 
 
 @pytest.fixture
 def test_owner(db):
-    return CustomUser.objects.create_user(id=1, email="test@test.com", password="Test_password")
+    return CustomUser.objects.create_user(email="test@test.com", password="Test_password")
 
 
 @pytest.fixture
 def test_user(db):
-    return CustomUser.objects.create_user(id=2, email="test@test1.com", password="Test_password")
+    return CustomUser.objects.create_user(email="test@test1.com", password="Test_password")
 
 
 @pytest.fixture
 def test_user_1(db):
-    return CustomUser.objects.create_user(id=3, email="test@test2.com", password="Test_password")
+    return CustomUser.objects.create_user(email="test@test2.com", password="Test_password")
+
+
+@pytest.fixture
+def test_user_2(db):
+    return CustomUser.objects.create_user(email="test@test3.com", password="Test_password")
 
 
 @pytest.fixture
@@ -38,4 +44,22 @@ def test_restaurant(db, test_owner, test_cuisine_type):
         city="test_city",
         owner=test_owner,
         cuisine_type=test_cuisine_type,
+    )
+
+
+@pytest.fixture
+def test_membership_manager(db, test_restaurant, test_user):
+    return MemberShip.objects.create(
+        restaurant=test_restaurant,
+        user=test_user,
+        role="manager",
+    )
+
+
+@pytest.fixture
+def test_membership_staff(db, test_restaurant, test_user_1):
+    return MemberShip.objects.create(
+        restaurant=test_restaurant,
+        user=test_user_1,
+        role="staff",
     )
