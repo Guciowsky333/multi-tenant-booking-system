@@ -40,10 +40,6 @@ class RestaurantViewSet(viewsets.ModelViewSet):
     parser_classes = [FormParser, MultiPartParser]
 
     def get_permissions(self):
-        """
-        Destroy or update restaurants is allowed only by owner of that restaurants.
-        Create or get all restaurants is allowed by any log in users
-        """
         if self.action in ["update", "partial_update", "destroy"]:
             return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
