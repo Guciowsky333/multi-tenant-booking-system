@@ -10,7 +10,7 @@ from available_rules.models import AvailableRule, RestaurantBreak, RestaurantExc
 
 
 # Post method
-def test_AvailableRuleViewSet_post(test_owner, test_restaurant):
+def test_AvailableRuleViewSet_post_owner(test_owner, test_restaurant):
     client = APIClient()
     client.force_authenticate(test_owner)
 
@@ -23,7 +23,53 @@ def test_AvailableRuleViewSet_post(test_owner, test_restaurant):
 
     response = client.post("/api/available_rules/", body)
     assert response.status_code == 201
-    assert AvailableRule.objects.filter(restaurant=test_restaurant.id, day_of_week=1).exists()
+    assert AvailableRule.objects.filter(restaurant=test_restaurant.id, day_of_week=body["day_of_week"]).exists()
+
+
+def test_AvailableRuleViewSet_post_manager(test_membership_manager, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    body = {
+        "restaurant": test_restaurant.id,
+        "day_of_week": 1,
+        "opening_time": "8:00",
+        "closing_time": "22:00",
+    }
+    response = client.post("/api/available_rules/", body)
+    assert response.status_code == 201
+    assert AvailableRule.objects.filter(restaurant=test_restaurant.id, day_of_week=body["day_of_week"]).exists()
+
+
+def test_AvailableRuleViewSet_post_staff(test_membership_staff, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    body = {
+        "restaurant": test_restaurant.id,
+        "day_of_week": 1,
+        "opening_time": "8:00",
+        "closing_time": "22:00",
+    }
+    response = client.post("/api/available_rules/", body)
+    assert response.status_code == 403
+
+
+def test_AvailableRuleViewSet_post_not_member_of_restaurant(test_user_1, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_user_1)
+    body = {
+        "restaurant": test_restaurant.id,
+        "day_of_week": 1,
+        "opening_time": "8:00",
+        "closing_time": "22:00",
+    }
+    response = client.post("/api/available_rules/", body)
+    assert response.status_code == 403
+
+
+def test_AvailableRuleViewSet_post_requires_authentication():
+    client = APIClient()
+    response = client.post("/api/available_rules/")
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -43,8 +89,8 @@ def test_AvailableRuleViewSet_post(test_owner, test_restaurant):
         ({"restaurant": 1, "day_of_week": 1, "opening_time": "8:00", "closing_time": "6:00"}, 400),
         # Incorrect day_of_week allowed 1-7 from Monday=1 to Sunday=7
         ({"restaurant": 1, "day_of_week": 8, "opening_time": "8:00", "closing_time": "22:00"}, 400),
-        # Not exist restaurant
-        ({"restaurant": 2, "day_of_week": 1, "opening_time": "8:00", "closing_time": "22:00"}, 400),
+        # Not exist restaurant returns 403
+        ({"restaurant": 2, "day_of_week": 1, "opening_time": "8:00", "closing_time": "22:00"}, 403),
     ],
 )
 def test_AvailableRuleViewSet_post_invalid_date(payload, expected_status, test_owner, test_restaurant):
@@ -82,57 +128,96 @@ def test_AvailableRuleViewSet_post_unique_day_of_week(test_owner, test_restauran
     assert response.status_code == 400
 
 
-def test_AvailableRuleViewSet_post_not_owner(test_user, test_restaurant):
-    client = APIClient()
-    client.force_authenticate(test_user)
-    body = {
-        "restaurant": test_restaurant.id,
-        "day_of_week": 1,
-        "opening_time": "8:00",
-        "closing_time": "22:00",
-    }
-    response = client.post("/api/available_rules/", body)
-    assert response.status_code == 403
-
-
-def test_AvailableRuleViewSet_post_requires_authentication():
-    client = APIClient()
-    response = client.post("/api/available_rules/")
-    assert response.status_code == 401
-
-
 # Get method
-def test_AvailableRuleViewSet_get(test_owner, test_restaurant):
+def test_AvailableRuleViewSet_get_owner(test_owner, test_restaurant):
     """
-    In this test we create 2 AvailableRule models and check whether
-    endpoint show us them correctly
+    Owner of the restaurant has access to this endpoint.
     """
     client = APIClient()
     client.force_authenticate(test_owner)
 
-    available_rule_1 = AvailableRule.objects.create(
+    available_rule = AvailableRule.objects.create(
         restaurant=test_restaurant,
         day_of_week=1,
         opening_time="8:00",
         closing_time="22:00",
     )
-    available_rule_2 = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=7,
-        opening_time="10:00",
-        closing_time="20:00",
-    )
 
     response = client.get("/api/available_rules/")
 
     assert response.status_code == 200
-    assert len(response.data) == 2
 
-    assert response.data[0]["restaurant"] == available_rule_1.restaurant.id
-    assert response.data[0]["day_of_week"] == available_rule_1.day_of_week
+    # Checks if date will be return correctly
+    assert len(response.data) == 1
 
-    assert response.data[1]["restaurant"] == available_rule_2.restaurant.id
-    assert response.data[1]["day_of_week"] == available_rule_2.day_of_week
+    assert response.data[0]["restaurant"] == available_rule.restaurant.id
+    assert response.data[0]["day_of_week"] == available_rule.day_of_week
+
+
+def test_AvailableRuleViewSet_get_manager(test_membership_manager, test_restaurant):
+    """
+    Member of this restaurant with "manager" role has access to this endpoint.
+    """
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+
+    available_rule = AvailableRule.objects.create(
+        restaurant=test_restaurant,
+        day_of_week=1,
+        opening_time="8:00",
+        closing_time="22:00",
+    )
+    response = client.get("/api/available_rules/")
+    assert response.status_code == 200
+
+    # Checks if date will be return correctly
+    assert len(response.data) == 1
+
+    assert response.data[0]["restaurant"] == available_rule.restaurant.id
+    assert response.data[0]["day_of_week"] == available_rule.day_of_week
+
+
+def test_AvailableRuleViewSet_get_staff(test_membership_staff, test_restaurant):
+    """
+    Member of this restaurant with "staff" role has access to this endpoint.
+    """
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+
+    available_rule = AvailableRule.objects.create(
+        restaurant=test_restaurant,
+        day_of_week=1,
+        opening_time="8:00",
+        closing_time="22:00",
+    )
+    response = client.get("/api/available_rules/")
+    assert response.status_code == 200
+
+    # Checks if date will be return correctly
+    assert len(response.data) == 1
+
+    assert response.data[0]["restaurant"] == available_rule.restaurant.id
+    assert response.data[0]["day_of_week"] == available_rule.day_of_week
+
+
+def test_AvailableRuleViewSet_get_not_owner_or_member(test_user_2, test_restaurant):
+    """
+    test_user_2 is not a member of test_restaurant so endpoint should return 200 but
+    with empty list even though we create 1 available_rule model with this restaurant.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+
+    AvailableRule.objects.create(
+        restaurant=test_restaurant,
+        day_of_week=1,
+        opening_time="8:00",
+        closing_time="22:00",
+    )
+
+    response = client.get("/api/available_rules/")
+    assert response.status_code == 200
+    assert len(response.data) == 0
 
 
 def test_AvailableRuleViewSet_get_requires_authentication():
@@ -141,10 +226,52 @@ def test_AvailableRuleViewSet_get_requires_authentication():
     assert response.status_code == 401
 
 
-def test_AvailableRuleViewSet_get_returns_404_for_non_owner(test_user, test_owner, test_restaurant):
+def test_AvailableRuleViewSet_retrive_owner(test_owner, test_restaurant):
+    available_rule = AvailableRule.objects.create(
+        restaurant=test_restaurant,
+        day_of_week=1,
+        opening_time="8:00",
+        closing_time="22:00",
+    )
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/available_rules/{available_rule.id}/")
+    assert response.status_code == 200
+
+
+def test_AvailableRuleViewSet_retrive_manager(test_membership_manager, test_restaurant):
+    available_rule = AvailableRule.objects.create(
+        restaurant=test_restaurant,
+        day_of_week=1,
+        opening_time="8:00",
+        closing_time="22:00",
+    )
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    response = client.get(f"/api/available_rules/{available_rule.id}/")
+    assert response.status_code == 200
+
+
+def test_AvailableRuleViewSet_retrive_staff(test_membership_staff, test_restaurant):
     """
-    In this test we create 1 AvailableRule model with restaurant that belong to test_owner
-    and then check whether different user has access to it
+    Member with "staff" role does not have access to this endpoint.
+    """
+    available_rule = AvailableRule.objects.create(
+        restaurant=test_restaurant,
+        day_of_week=1,
+        opening_time="8:00",
+        closing_time="22:00",
+    )
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.get(f"/api/available_rules/{available_rule.id}/")
+    assert response.status_code == 403
+
+
+def test_AvailableRuleViewSet_retrive_returns_404_for_non_owner_or_manager(test_user, test_owner, test_restaurant):
+    """
+    If user is not owner or member of provided restaurant, return 404.
+    User even does not know that this restaurant exists.
     """
     available_rule = AvailableRule.objects.create(
         restaurant=test_restaurant,
@@ -159,7 +286,7 @@ def test_AvailableRuleViewSet_get_returns_404_for_non_owner(test_user, test_owne
 
 
 # Put method
-def test_AvailableRuleViewSet_put(test_owner, test_available_rule):
+def test_AvailableRuleViewSet_put_owner(test_owner, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_owner)
 
@@ -177,6 +304,46 @@ def test_AvailableRuleViewSet_put(test_owner, test_available_rule):
     assert test_available_rule.day_of_week == body["day_of_week"]
     assert test_available_rule.opening_time == time(12, 0)
     assert test_available_rule.closing_time == time(20, 0)
+
+
+def test_AvailableRuleViewSet_put_manager(test_membership_manager, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+
+    body = {
+        "restaurant": test_available_rule.restaurant.id,
+        "day_of_week": 7,
+        "opening_time": "12:00",
+        "closing_time": "20:00",
+    }
+    response = client.put(f"/api/available_rules/{test_available_rule.id}/", body)
+    test_available_rule.refresh_from_db()
+    assert response.status_code == 200
+
+    # Checks if our data in test_available_rule has been changed correctly
+    assert test_available_rule.day_of_week == body["day_of_week"]
+    assert test_available_rule.opening_time == time(12, 0)
+    assert test_available_rule.closing_time == time(20, 0)
+
+
+def test_AvailableRuleViewSet_put_staff(test_membership_staff, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.put(f"/api/available_rules/{test_available_rule.id}/", {})
+    assert response.status_code == 403
+
+
+def test_AvailableRuleViewSet_put_not_owner_or_manager_return_404(test_user_2, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.put(f"/api/available_rules/{test_available_rule.id}/", {})
+    assert response.status_code == 404
+
+
+def test_AvailableRuleViewSet_put_requires_authentication():
+    client = APIClient()
+    response = client.put("/api/available_rules/", {})
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -218,23 +385,10 @@ def test_AvailableRuleViewSet_put_not_found(test_owner):
     assert response.status_code == 404
 
 
-def test_AvailableRuleViewSet_put_returns_404_for_non_owner(test_user, test_available_rule):
-    client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.put(f"/api/available_rules/{test_available_rule.id}/", {})
-    assert response.status_code == 404
-
-
-def test_AvailableRuleViewSet_put_requires_authentication():
-    client = APIClient()
-    response = client.put("/api/available_rules/", {})
-    assert response.status_code == 401
-
-
 # Patch method
 
 
-def test_AvailableRuleViewSet_patch(test_owner, test_available_rule):
+def test_AvailableRuleViewSet_patch_owner(test_owner, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_owner)
     body = {
@@ -247,23 +401,29 @@ def test_AvailableRuleViewSet_patch(test_owner, test_available_rule):
     assert test_available_rule.day_of_week == body["day_of_week"]
 
 
-def test_AvailableRuleViewSet_patch_not_found(test_owner, test_available_rule):
+def test_AvailableRuleViewSet_patch_manager(test_membership_manager, test_available_rule):
     client = APIClient()
-    client.force_authenticate(test_owner)
+    client.force_authenticate(test_membership_manager.user)
+    body = {
+        "day_of_week": 7,
+    }
 
-    # User provided not exist available_rule
-    response = client.patch("/api/available_rules/not_exists/", {})
-    assert response.status_code == 404
+    response = client.patch(f"/api/available_rules/{test_available_rule.id}/", body)
+    test_available_rule.refresh_from_db()
+    assert response.status_code == 200
+    assert test_available_rule.day_of_week == body["day_of_week"]
 
 
-def test_AvailableRuleViewSet_patch_returns_404_for_non_owner(test_user, test_available_rule):
-    """
-    Restaurant in test_available_rule belong to test_owner so this endpoint should return 404
-    for test_user because test_user has not any available_rules.
-    """
+def test_AvailableRuleViewSet_patch_staff(test_membership_staff, test_available_rule):
     client = APIClient()
-    client.force_authenticate(test_user)
+    client.force_authenticate(test_membership_staff.user)
+    response = client.patch(f"/api/available_rules/{test_available_rule.id}/", {})
+    assert response.status_code == 403
 
+
+def test_AvailableRuleViewSet_patch_return_404_for_not_owner_or_manager(test_user_2, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
     response = client.patch(f"/api/available_rules/{test_available_rule.id}/", {})
     assert response.status_code == 404
 
@@ -274,13 +434,50 @@ def test_AvailableRuleViewSet_patch_requires_authentication():
     assert response.status_code == 401
 
 
+def test_AvailableRuleViewSet_patch_not_found(test_owner, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+
+    # User provided not exist available_rule
+    response = client.patch("/api/available_rules/not_exists/", {})
+    assert response.status_code == 404
+
+
 # Delete Method
-def test_AvailableRuleViewSet_delete(test_owner, test_available_rule):
+def test_AvailableRuleViewSet_delete_owner(test_owner, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.delete(f"/api/available_rules/{test_available_rule.id}/")
     assert response.status_code == 204
     assert not AvailableRule.objects.filter(id=test_available_rule.id).exists()
+
+
+def test_AvailableRuleViewSet_delete_manager(test_membership_manager, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    response = client.delete(f"/api/available_rules/{test_available_rule.id}/")
+    assert response.status_code == 204
+    assert not AvailableRule.objects.filter(id=test_available_rule.id).exists()
+
+
+def test_AvailableRuleViewSet_delete_staff(test_membership_staff, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.delete(f"/api/available_rules/{test_available_rule.id}/")
+    assert response.status_code == 403
+
+
+def test_AvailableRuleViewSet_delete_return_404_for_not_owner_or_manager(test_user_2, test_available_rule):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.delete(f"/api/available_rules/{test_available_rule.id}/")
+    assert response.status_code == 404
+
+
+def test_AvailableRuleViewSet_delete_requires_authentication():
+    client = APIClient()
+    response = client.delete("/api/available_rules/")
+    assert response.status_code == 401
 
 
 def test_AvailableRuleViewSet_delete_not_found(test_owner, test_available_rule):
@@ -290,12 +487,6 @@ def test_AvailableRuleViewSet_delete_not_found(test_owner, test_available_rule):
     # User provided not exist available_rule
     response = client.delete("/api/available_rules/not_exists/")
     assert response.status_code == 404
-
-
-def test_AvailableRuleViewSet_delete_requires_authentication():
-    client = APIClient()
-    response = client.delete("/api/available_rules/")
-    assert response.status_code == 401
 
 
 # test for api/available_rules/restaurant_table/

@@ -3,7 +3,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
-from available_rules.permisions import IsRestaurantRelatedOwner
+from available_rules.permisions import IsRestaurantOwnerOrManager, IsRestaurantRelatedOwner
 from available_rules.serializers import (
     AvailableRuleSerializer,
     RestaurantBreakSerializer,
@@ -13,11 +13,19 @@ from available_rules.serializers import (
 
 
 class AvailableRuleViewSet(viewsets.ModelViewSet):
+    """
+    This endpoint is allowed only for owner or members of the restaurant.
+    For public available rules date use GET /api/restaurants/{id}/ which returns available rules
+    assigned to provided restaurant.
+    """
+
     serializer_class = AvailableRuleSerializer
-    permission_classes = [IsAuthenticated, IsRestaurantRelatedOwner]
+    permission_classes = [IsAuthenticated, IsRestaurantOwnerOrManager]
 
     def get_queryset(self):
-        return AvailableRule.objects.filter(restaurant__owner=self.request.user)
+        return AvailableRule.objects.filter(restaurant__owner=self.request.user) | AvailableRule.objects.filter(
+            restaurant__memberships__user=self.request.user
+        )
 
 
 class RestaurantTableViewSet(viewsets.ModelViewSet):
