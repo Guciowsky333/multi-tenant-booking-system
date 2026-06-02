@@ -20,13 +20,18 @@ class IsRestaurantRelatedOwner(permissions.BasePermission):
 class IsRestaurantOwnerOrManager(permissions.BasePermission):
     """
     - create, update, partial_update, destroy: Only owner or member with "manager" role.
-    - retrieve, List: Handled by IsAuthenticated in get_permissions.
+    - retrieve, List: Only member or owner of the restaurant.
 
     Note: Returns 403 instead of 404 for non-existent restaurants intentionally
     to avoid exposing whether a restaurant exists.
     """
 
     def has_object_permission(self, request, view, obj):
+        if view.action == "retrieve":
+            return (
+                obj.restaurant.owner == request.user
+                or MemberShip.objects.filter(restaurant=obj.restaurant, user=request.user).exists()
+            )
         return (
             obj.restaurant.owner == request.user
             or MemberShip.objects.filter(restaurant=obj.restaurant, user=request.user, role="manager").exists()

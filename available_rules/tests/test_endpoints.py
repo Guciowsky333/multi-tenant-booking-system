@@ -204,6 +204,7 @@ def test_AvailableRuleViewSet_get_not_owner_or_member(test_user_2, test_restaura
     """
     test_user_2 is not a member of test_restaurant so endpoint should return 200 but
     with empty list even though we create 1 available_rule model with this restaurant.
+    For public data he can use GET /api/restaurants/{id}/
     """
     client = APIClient()
     client.force_authenticate(test_user_2)
@@ -253,9 +254,6 @@ def test_AvailableRuleViewSet_retrive_manager(test_membership_manager, test_rest
 
 
 def test_AvailableRuleViewSet_retrive_staff(test_membership_staff, test_restaurant):
-    """
-    Member with "staff" role does not have access to this endpoint.
-    """
     available_rule = AvailableRule.objects.create(
         restaurant=test_restaurant,
         day_of_week=1,
@@ -265,10 +263,10 @@ def test_AvailableRuleViewSet_retrive_staff(test_membership_staff, test_restaura
     client = APIClient()
     client.force_authenticate(test_membership_staff.user)
     response = client.get(f"/api/available_rules/{available_rule.id}/")
-    assert response.status_code == 403
+    assert response.status_code == 200
 
 
-def test_AvailableRuleViewSet_retrive_returns_404_for_non_owner_or_manager(test_user, test_owner, test_restaurant):
+def test_AvailableRuleViewSet_retrive_returns_404_for_non_owner_or_member(test_user, test_owner, test_restaurant):
     """
     If user is not owner or member of provided restaurant, return 404.
     User even does not know that this restaurant exists.
@@ -493,7 +491,7 @@ def test_AvailableRuleViewSet_delete_not_found(test_owner, test_available_rule):
 
 
 # Post method
-def test_RestaurantTableViewSet_post(test_owner, test_restaurant):
+def test_RestaurantTableViewSet_post_owner(test_owner, test_restaurant):
     client = APIClient()
     client.force_authenticate(test_owner)
     body = {
@@ -506,6 +504,49 @@ def test_RestaurantTableViewSet_post(test_owner, test_restaurant):
     assert RestaurantTable.objects.filter(restaurant=body["restaurant"], table_number=body["table_number"]).exists()
 
 
+def test_RestaurantTableViewSet_post_manager(test_membership_manager, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    body = {
+        "restaurant": test_restaurant.id,
+        "table_number": "A10",
+        "seats": 3,
+    }
+    response = client.post("/api/available_rules/restaurant_table/", body)
+    assert response.status_code == 201
+    assert RestaurantTable.objects.filter(restaurant=body["restaurant"], table_number=body["table_number"]).exists()
+
+
+def test_RestaurantTableViewSet_post_staff(test_membership_staff, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    body = {
+        "restaurant": test_restaurant.id,
+        "table_number": "A10",
+        "seats": 3,
+    }
+    response = client.post("/api/available_rules/restaurant_table/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantTableViewSet_post_not_owner_or_manager(test_user_2, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    body = {
+        "restaurant": test_restaurant.id,
+        "table_number": "A10",
+        "seats": 3,
+    }
+    response = client.post("/api/available_rules/restaurant_table/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantTableViewSet_post_requires_authentication():
+    client = APIClient()
+    response = client.post("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
+
+
 @pytest.mark.parametrize(
     "payload, expected_status",
     [
@@ -515,8 +556,8 @@ def test_RestaurantTableViewSet_post(test_owner, test_restaurant):
         ({"restaurant": 1, "table_number": "", "seats": 4}, 400),
         # Missing seats
         ({"restaurant": 1, "table_number": "A1", "seats": ""}, 400),
-        # Restaurant not exist
-        ({"restaurant": 2, "table_number": "A1", "seats": 4}, 400),
+        # Restaurant not exist return 403
+        ({"restaurant": 2, "table_number": "A1", "seats": 4}, 403),
         # table numer is too long max length = 10
         ({"restaurant": 1, "table_number": "12345678910", "seats": 4}, 400),
         # Seats are not number
@@ -555,29 +596,8 @@ def test_RestaurantTableViewSet_post_unique_table_number(test_owner, test_restau
     assert response.status_code == 400
 
 
-def test_RestaurantTableViewSet_post_not_owner(test_user, test_restaurant):
-    """
-    User in this test are not owner of provided restaurant.
-    """
-    client = APIClient()
-    client.force_authenticate(test_user)
-    body = {
-        "restaurant": test_restaurant.id,
-        "table_number": "A1",
-        "seats": 4,
-    }
-    response = client.post("/api/available_rules/restaurant_table/", body)
-    assert response.status_code == 403
-
-
-def test_RestaurantTableViewSet_post_requires_authentication():
-    client = APIClient()
-    response = client.post("/api/available_rules/restaurant_table/")
-    assert response.status_code == 401
-
-
 # Get method
-def test_RestaurantTableViewSet_get(test_owner, test_restaurant_table):
+def test_RestaurantTableViewSet_get_owner(test_owner, test_restaurant_table):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.get("/api/available_rules/restaurant_table/")
@@ -585,22 +605,38 @@ def test_RestaurantTableViewSet_get(test_owner, test_restaurant_table):
     assert len(response.data) == 1
 
 
-def test_RestaurantTableViewSet_get_details(test_owner, test_restaurant_table):
+def test_RestaurantTableViewSet_get_manager(test_membership_manager, test_restaurant_table):
     client = APIClient()
-    client.force_authenticate(test_owner)
-    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    client.force_authenticate(test_membership_manager.user)
+    response = client.get("/api/available_rules/restaurant_table/")
     assert response.status_code == 200
+    assert len(response.data) == 1
 
 
-def test_RestaurantTableViewSet_get_returns_404_for_non_owner(test_user, test_restaurant_table):
+def test_RestaurantTableViewSet_get_staff(test_membership_staff, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.get("/api/available_rules/restaurant_table/")
+    assert response.status_code == 200
+    assert len(response.data) == 1
+
+
+def test_RestaurantTableViewSet_get_not_owner_or_manager(test_user_2, test_restaurant_table):
     """
-    This endpoint should not return any tabel for test_user because test_user has not any tabel
-    test_restaurant_table has restaurant that belong to test_owner.
+    User that is not member or owner get empty list.
+    For public data he can use GET /api/restaurants/{id}/
     """
     client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
-    assert response.status_code == 404
+    client.force_authenticate(test_user_2)
+    response = client.get("/api/available_rules/restaurant_table/")
+    assert response.status_code == 200
+    assert len(response.data) == 0
+
+
+def test_RestaurantTableViewSet_get_requires_authentication():
+    client = APIClient()
+    response = client.get("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
 
 
 def test_RestaurantTableViewSet_get_not_exist_table(test_owner, test_restaurant_table):
@@ -610,8 +646,36 @@ def test_RestaurantTableViewSet_get_not_exist_table(test_owner, test_restaurant_
     assert response.status_code == 404
 
 
+def test_RestaurantTableViewSet_retrive_owner(test_owner, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantTableViewSet_retrive_manager(test_membership_manager, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantTableViewSet_retrive_staff(test_membership_staff, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantTableViewSet_retrive_return_404_for_not_owner_or_mamber(test_user_2, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.get(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 404
+
+
 # Put method
-def test_RestaurantTableViewSet_put(test_owner, test_restaurant_table):
+def test_RestaurantTableViewSet_put_owner(test_owner, test_restaurant_table):
 
     client = APIClient()
     client.force_authenticate(test_owner)
@@ -625,6 +689,42 @@ def test_RestaurantTableViewSet_put(test_owner, test_restaurant_table):
     assert response.status_code == 200
     assert test_restaurant_table.table_number == body["table_number"]
     assert test_restaurant_table.seats == body["seats"]
+
+
+def test_RestaurantTableViewSet_put_manager(test_membership_manager, test_restaurant_table):
+
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    body = {
+        "restaurant": test_restaurant_table.restaurant.id,
+        "table_number": "A11",
+        "seats": 3,
+    }
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", body)
+    test_restaurant_table.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_table.table_number == body["table_number"]
+    assert test_restaurant_table.seats == body["seats"]
+
+
+def test_RestaurantTableViewSet_put_staff(test_membership_staff, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", {})
+    assert response.status_code == 403
+
+
+def test_RestaurantTableViewSet_put_return_404_for_not_owner_or_member(test_user_2, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", {})
+    assert response.status_code == 404
+
+
+def test_RestaurantTableViewSet_put_requires_authentication():
+    client = APIClient()
+    response = client.put("/api/available_rules/restaurant_table/")
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -653,13 +753,6 @@ def test_RestaurantTableViewSet_put_invalid_date(payload, expected_status, test_
     assert response.status_code == expected_status
 
 
-def test_RestaurantTableViewSet_put_returns_404_for_not_owner(test_user, test_restaurant_table):
-    client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
-    assert response.status_code == 404
-
-
 def test_RestaurantTableViewSet_put_not_found(test_owner):
     client = APIClient()
     client.force_authenticate(test_owner)
@@ -667,14 +760,8 @@ def test_RestaurantTableViewSet_put_not_found(test_owner):
     assert response.status_code == 404
 
 
-def test_RestaurantTableViewSet_put_requires_authentication():
-    client = APIClient()
-    response = client.put("/api/available_rules/restaurant_table/")
-    assert response.status_code == 401
-
-
 # Patch method
-def test_RestaurantTableViewSet_patch(test_owner, test_restaurant_table):
+def test_RestaurantTableViewSet_patch_owner(test_owner, test_restaurant_table):
     client = APIClient()
     client.force_authenticate(test_owner)
     body = {"seats": 3}
@@ -684,10 +771,27 @@ def test_RestaurantTableViewSet_patch(test_owner, test_restaurant_table):
     assert test_restaurant_table.seats == body["seats"]
 
 
-def test_RestaurantTableViewSet_patch_returns_404_for_not_owner(test_user, test_restaurant_table):
+def test_RestaurantTableViewSet_patch_manager(test_membership_manager, test_restaurant_table):
     client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.patch(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    client.force_authenticate(test_membership_manager.user)
+    body = {"seats": 3}
+    response = client.patch(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", body)
+    test_restaurant_table.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_table.seats == body["seats"]
+
+
+def test_RestaurantTableViewSet_patch_staff(test_membership_staff, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", {})
+    assert response.status_code == 403
+
+
+def test_RestaurantTableViewSet_patch_return_404_for_not_owner_or_member(test_user_2, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.put(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/", {})
     assert response.status_code == 404
 
 
@@ -705,7 +809,7 @@ def test_RestaurantTableViewSet_patch_requires_authentication():
 
 
 # Delete method
-def test_RestaurantTableViewSet_delete(test_owner, test_restaurant_table):
+def test_RestaurantTableViewSet_delete_owner(test_owner, test_restaurant_table):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.delete(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
@@ -713,24 +817,39 @@ def test_RestaurantTableViewSet_delete(test_owner, test_restaurant_table):
     assert not RestaurantTable.objects.filter(id=test_restaurant_table.id).exists()
 
 
-def test_RestaurantTableViewSet_delete_not_found(test_owner):
+def test_RestaurantTableViewSet_delete_manager(test_membership_manager, test_restaurant_table):
     client = APIClient()
-    client.force_authenticate(test_owner)
-    response = client.delete("/api/available_rules/restaurant_table/not_exist_table/")
-    assert response.status_code == 404
+    client.force_authenticate(test_membership_manager.user)
+    response = client.delete(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 204
+    assert not RestaurantTable.objects.filter(id=test_restaurant_table.id).exists()
 
 
-def test_RestaurantTableViewSet_delete_returns_404_for_not_owner(test_user, test_restaurant_table):
+def test_RestaurantTableViewSet_delete_staff(test_membership_staff, test_restaurant_table):
     client = APIClient()
-    client.force_authenticate(test_user)
+    client.force_authenticate(test_membership_staff.user)
+    response = client.delete(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
+    assert response.status_code == 403
+
+
+def test_RestaurantTableViewSet_delete_return_404_for_not_owner_or_member(test_user_2, test_restaurant_table):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
     response = client.delete(f"/api/available_rules/restaurant_table/{test_restaurant_table.id}/")
     assert response.status_code == 404
 
 
-def test_RestaurantTableViewSet_requires_authentication():
+def test_RestaurantTableViewSet_delete_requires_authentication():
     client = APIClient()
     response = client.get("/api/available_rules/restaurant_table/")
     assert response.status_code == 401
+
+
+def test_RestaurantTableViewSet_delete_not_found(test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete("/api/available_rules/restaurant_table/not_found/")
+    assert response.status_code == 404
 
 
 # Tests for /api/available_rules/restaurant_break/
