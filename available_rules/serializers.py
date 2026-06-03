@@ -56,6 +56,7 @@ class RestaurantBreakSerializer(serializers.ModelSerializer):
     def validate(self, data):
         start = data.get("start")
         end = data.get("end")
+
         if start and end:
             if end <= start:
                 raise serializers.ValidationError("Start time must be before end time")

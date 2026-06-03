@@ -3,7 +3,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
-from available_rules.permisions import IsRestaurantOwnerOrManager, IsRestaurantRelatedOwner
+from available_rules.permisions import IsRestaurantOwnerOrManager
 from available_rules.serializers import (
     AvailableRuleSerializer,
     RestaurantBreakSerializer,
@@ -46,7 +46,6 @@ class RestaurantTableViewSet(viewsets.ModelViewSet):
 class RestaurantBreakViewSet(viewsets.ModelViewSet):
     """
     The same access rules as AvailableRuleViewSet.
-    For public data use GET /api/restaurants/{id}/
     """
 
     serializer_class = RestaurantBreakSerializer
@@ -59,8 +58,14 @@ class RestaurantBreakViewSet(viewsets.ModelViewSet):
 
 
 class RestaurantExceptionViewSet(viewsets.ModelViewSet):
+    """
+    The same access rules as AvailableRuleViewSet.
+    """
+
     serializer_class = RestaurantExceptionSerializer
-    permission_classes = [IsAuthenticated, IsRestaurantRelatedOwner]
+    permission_classes = [IsAuthenticated, IsRestaurantOwnerOrManager]
 
     def get_queryset(self):
-        return RestaurantException.objects.filter(restaurant__owner=self.request.user)
+        return RestaurantException.objects.filter(
+            restaurant__owner=self.request.user
+        ) | RestaurantException.objects.filter(restaurant__memberships__user=self.request.user)

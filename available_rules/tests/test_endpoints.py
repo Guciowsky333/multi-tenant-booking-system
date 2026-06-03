@@ -129,20 +129,13 @@ def test_AvailableRuleViewSet_post_unique_day_of_week(test_owner, test_restauran
 
 
 # Get method
-def test_AvailableRuleViewSet_get_owner(test_owner, test_restaurant):
+def test_AvailableRuleViewSet_get_owner(test_owner, test_available_rule):
     """
     Owner of the restaurant has access to this endpoint.
     """
     client = APIClient()
     client.force_authenticate(test_owner)
 
-    available_rule = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
-
     response = client.get("/api/available_rules/")
 
     assert response.status_code == 200
@@ -150,71 +143,51 @@ def test_AvailableRuleViewSet_get_owner(test_owner, test_restaurant):
     # Checks if date will be return correctly
     assert len(response.data) == 1
 
-    assert response.data[0]["restaurant"] == available_rule.restaurant.id
-    assert response.data[0]["day_of_week"] == available_rule.day_of_week
+    assert response.data[0]["restaurant"] == test_available_rule.restaurant.id
+    assert response.data[0]["day_of_week"] == test_available_rule.day_of_week
 
 
-def test_AvailableRuleViewSet_get_manager(test_membership_manager, test_restaurant):
+def test_AvailableRuleViewSet_get_manager(test_membership_manager, test_available_rule):
     """
     Member of this restaurant with "manager" role has access to this endpoint.
     """
     client = APIClient()
     client.force_authenticate(test_membership_manager.user)
 
-    available_rule = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
     response = client.get("/api/available_rules/")
     assert response.status_code == 200
 
     # Checks if date will be return correctly
     assert len(response.data) == 1
 
-    assert response.data[0]["restaurant"] == available_rule.restaurant.id
-    assert response.data[0]["day_of_week"] == available_rule.day_of_week
+    assert response.data[0]["restaurant"] == test_available_rule.restaurant.id
+    assert response.data[0]["day_of_week"] == test_available_rule.day_of_week
 
 
-def test_AvailableRuleViewSet_get_staff(test_membership_staff, test_restaurant):
+def test_AvailableRuleViewSet_get_staff(test_membership_staff, test_available_rule):
     """
     Member of this restaurant with "staff" role has access to this endpoint.
     """
     client = APIClient()
     client.force_authenticate(test_membership_staff.user)
 
-    available_rule = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
     response = client.get("/api/available_rules/")
     assert response.status_code == 200
 
     # Checks if date will be return correctly
     assert len(response.data) == 1
 
-    assert response.data[0]["restaurant"] == available_rule.restaurant.id
-    assert response.data[0]["day_of_week"] == available_rule.day_of_week
+    assert response.data[0]["restaurant"] == test_available_rule.restaurant.id
+    assert response.data[0]["day_of_week"] == test_available_rule.day_of_week
 
 
-def test_AvailableRuleViewSet_get_not_owner_or_member(test_user_2, test_restaurant):
+def test_AvailableRuleViewSet_get_not_owner_or_member(test_user_2, test_available_rule):
     """
-    test_user_2 is not a member of test_restaurant so endpoint should return 200 but
-    with empty list even though we create 1 available_rule model with this restaurant.
+    test_user_2 is not a member of test_restaurant so endpoint should return 200 but with empty list.
     For public data he can use GET /api/restaurants/{id}/
     """
     client = APIClient()
     client.force_authenticate(test_user_2)
-
-    AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
 
     response = client.get("/api/available_rules/")
     assert response.status_code == 200
@@ -227,59 +200,37 @@ def test_AvailableRuleViewSet_get_requires_authentication():
     assert response.status_code == 401
 
 
-def test_AvailableRuleViewSet_retrive_owner(test_owner, test_restaurant):
-    available_rule = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
+def test_AvailableRuleViewSet_retrive_owner(test_owner, test_available_rule):
+
     client = APIClient()
     client.force_authenticate(test_owner)
-    response = client.get(f"/api/available_rules/{available_rule.id}/")
+    response = client.get(f"/api/available_rules/{test_available_rule.id}/")
     assert response.status_code == 200
 
 
-def test_AvailableRuleViewSet_retrive_manager(test_membership_manager, test_restaurant):
-    available_rule = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
+def test_AvailableRuleViewSet_retrive_manager(test_membership_manager, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_membership_manager.user)
-    response = client.get(f"/api/available_rules/{available_rule.id}/")
+    response = client.get(f"/api/available_rules/{test_available_rule.id}/")
     assert response.status_code == 200
 
 
-def test_AvailableRuleViewSet_retrive_staff(test_membership_staff, test_restaurant):
-    available_rule = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
+def test_AvailableRuleViewSet_retrive_staff(test_membership_staff, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_membership_staff.user)
-    response = client.get(f"/api/available_rules/{available_rule.id}/")
+    response = client.get(f"/api/available_rules/{test_available_rule.id}/")
     assert response.status_code == 200
 
 
-def test_AvailableRuleViewSet_retrive_returns_404_for_non_owner_or_member(test_user, test_owner, test_restaurant):
+def test_AvailableRuleViewSet_retrive_returns_404_for_non_owner_or_member(test_user, test_available_rule):
     """
     If user is not owner or member of provided restaurant, return 404.
     User even does not know that this restaurant exists.
     """
-    available_rule = AvailableRule.objects.create(
-        restaurant=test_restaurant,
-        day_of_week=1,
-        opening_time="8:00",
-        closing_time="22:00",
-    )
+
     client = APIClient()
     client.force_authenticate(test_user)
-    response = client.get(f"/api/available_rules/{available_rule.id}/")
+    response = client.get(f"/api/available_rules/{test_available_rule.id}/")
     assert response.status_code == 404
 
 
@@ -1176,7 +1127,7 @@ def test_RestaurantBreakViewSet_delete_requires_authentication():
 
 
 # Post method
-def test_RestaurantExceptionViewSet_post_type_closed(test_owner, test_restaurant):
+def test_RestaurantExceptionViewSet_post_type_closed_owner(test_owner, test_restaurant):
     """
     In this test we create a RestaurantException model with type = closed so fields
     opening_time and closing_time must be empty.
@@ -1192,6 +1143,50 @@ def test_RestaurantExceptionViewSet_post_type_closed(test_owner, test_restaurant
     response = client.post("/api/available_rules/restaurant_exception/", body)
     assert response.status_code == 201
     assert RestaurantException.objects.filter(restaurant=test_restaurant).exists()
+
+
+def test_RestaurantExceptionViewSet_post_type_closed_manager(test_membership_manager, test_restaurant):
+    """
+    In this test we create a RestaurantException model with type = closed so fields
+    opening_time and closing_time must be empty.
+    """
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    tomorrow = (timezone.now() + timedelta(days=1)).date().isoformat()
+    body = {
+        "restaurant": test_restaurant.id,
+        "date": tomorrow,
+        "type": "closed",
+    }
+    response = client.post("/api/available_rules/restaurant_exception/", body)
+    assert response.status_code == 201
+    assert RestaurantException.objects.filter(restaurant=test_restaurant).exists()
+
+
+def test_RestaurantExceptionViewSet_post_type_closed_staff(test_membership_staff, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    tomorrow = (timezone.now() + timedelta(days=1)).date().isoformat()
+    body = {
+        "restaurant": test_restaurant.id,
+        "date": tomorrow,
+        "type": "closed",
+    }
+    response = client.post("/api/available_rules/restaurant_exception/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantExceptionViewSet_post_type_closed_not_owner_or_member(test_user_2, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    tomorrow = (timezone.now() + timedelta(days=1)).date().isoformat()
+    body = {
+        "restaurant": test_restaurant.id,
+        "date": tomorrow,
+        "type": "closed",
+    }
+    response = client.post("/api/available_rules/restaurant_exception/", body)
+    assert response.status_code == 403
 
 
 def test_RestaurantExceptionViewSet_post_type_special_hours(test_owner, test_restaurant):
@@ -1224,7 +1219,7 @@ def test_RestaurantExceptionViewSet_post_type_special_hours(test_owner, test_res
         # Missing type
         ({"restaurant": 1, "date": "3000-05-26", "type": ""}, 400),
         # Not exist restaurant
-        ({"restaurant": 2, "date": "3000-05-26", "type": "closed"}, 400),
+        ({"restaurant": 2, "date": "3000-05-26", "type": "closed"}, 403),
         # Wrong date formant
         ({"restaurant": 1, "date": "wrong_format", "type": "closed"}, 400),
         # Date is in the past (current data = 2026-05-26)
@@ -1258,18 +1253,6 @@ def test_RestaurantExceptionViewSet_post_invalid_data(payload, expected_status, 
     assert response.status_code == expected_status
 
 
-def test_RestaurantExceptionViewSet_post_not_restaurant_owner(test_user, test_restaurant):
-    client = APIClient()
-    client.force_authenticate(test_user)
-    body = {
-        "restaurant": test_restaurant.id,
-        "date": "3000-05-26",
-        "type": "closed",
-    }
-    response = client.post("/api/available_rules/restaurant_exception/", body)
-    assert response.status_code == 403
-
-
 def test_RestaurantExceptionViewSet_post_requires_authentication():
     client = APIClient()
     response = client.post("/api/available_rules/restaurant_exception/")
@@ -1277,7 +1260,7 @@ def test_RestaurantExceptionViewSet_post_requires_authentication():
 
 
 # Get method
-def test_RestaurantExceptionViewSet_get(test_owner, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_get_owner(test_owner, test_restaurant_exception):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.get("/api/available_rules/restaurant_exception/")
@@ -1285,18 +1268,31 @@ def test_RestaurantExceptionViewSet_get(test_owner, test_restaurant_exception):
     assert len(response.data) == 1
 
 
-def test_RestaurantExceptionViewSet_get_details(test_owner, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_get_manager(test_membership_manager, test_restaurant_exception):
     client = APIClient()
-    client.force_authenticate(test_owner)
-    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    client.force_authenticate(test_membership_manager.user)
+    response = client.get("/api/available_rules/restaurant_exception/")
     assert response.status_code == 200
+    assert len(response.data) == 1
 
 
-def test_RestaurantExceptionViewSet_get_returns_404_for_not_owner(test_user, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_get_staff(test_membership_staff, test_restaurant_exception):
     client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
-    assert response.status_code == 404
+    client.force_authenticate(test_membership_staff.user)
+    response = client.get("/api/available_rules/restaurant_exception/")
+    assert response.status_code == 200
+    assert len(response.data) == 1
+
+
+def test_RestaurantExceptionViewSet_get_not_owner_or_member(test_user_2, test_restaurant_exception):
+    """
+    If user is not owner or member of any restaurant endpoint return 200 but with empty list.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.get("/api/available_rules/restaurant_exception/")
+    assert response.status_code == 200
+    assert len(response.data) == 0
 
 
 def test_RestaurantExceptionViewSet_get_requires_authentication():
@@ -1305,8 +1301,40 @@ def test_RestaurantExceptionViewSet_get_requires_authentication():
     assert response.status_code == 401
 
 
+def test_RestaurantExceptionViewSet_retrive_owner(test_owner, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantExceptionViewSet_retrive_manager(test_membership_manager, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantExceptionViewSet_retrive_staff(test_membership_staff, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 200
+
+
+def test_RestaurantExceptionViewSet_retrive_return_404_for_not_owner_or_member(test_user_2, test_restaurant_exception):
+    """
+    If user is not owner or member of provided restaurant endpoint return 404.
+    User even does not know that this restaurant exists.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.get(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 404
+
+
 # Put method
-def test_RestaurantExceptionViewSet_put(test_owner, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_put_owner(test_owner, test_restaurant_exception):
     client = APIClient()
     client.force_authenticate(test_owner)
     body = {
@@ -1319,6 +1347,57 @@ def test_RestaurantExceptionViewSet_put(test_owner, test_restaurant_exception):
     test_restaurant_exception.refresh_from_db()
     assert response.status_code == 200
     assert test_restaurant_exception.date == datetime.strptime(body["date"], "%Y-%m-%d").date()
+
+
+def test_RestaurantExceptionViewSet_put_manager(test_membership_manager, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_membership_manager.user)
+    body = {
+        "restaurant": test_restaurant_exception.restaurant.id,
+        "date": "3001-05-26",
+        "type": "closed",
+    }
+
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    test_restaurant_exception.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_exception.date == datetime.strptime(body["date"], "%Y-%m-%d").date()
+
+
+def test_RestaurantExceptionViewSet_put_staff(test_membership_staff, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    body = {
+        "restaurant": test_restaurant_exception.restaurant.id,
+        "date": "3001-05-26",
+        "type": "closed",
+    }
+
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantExceptionViewSet_put_return_404_for_not_owner_or_member(test_user_2, test_restaurant_exception):
+    """
+    If user is not owner or member of provided restaurant endpoint return 404.
+    User even does not know that this restaurant exists.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    body = {
+        "restaurant": test_restaurant_exception.restaurant.id,
+        "date": "3001-05-26",
+        "type": "closed",
+    }
+
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    assert response.status_code == 404
+
+
+def test_RestaurantExceptionViewSet_put_requires_authentication(test_restaurant_exception):
+    client = APIClient()
+    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -1367,21 +1446,8 @@ def test_RestaurantExceptionViewSet_put_invalid_data(
     assert response.status_code == expected_status
 
 
-def test_RestaurantExceptionViewSet_put_returns_404_for_not_owner(test_user, test_restaurant_exception):
-    client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
-    assert response.status_code == 404
-
-
-def test_RestaurantExceptionViewSet_put_requires_authentication(test_restaurant_exception):
-    client = APIClient()
-    response = client.put(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
-    assert response.status_code == 401
-
-
 # Patch method
-def test_RestaurantExceptionViewSet_patch(test_owner, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_patch_owner(test_owner, test_restaurant_exception):
     client = APIClient()
     client.force_authenticate(test_owner)
 
@@ -1394,10 +1460,37 @@ def test_RestaurantExceptionViewSet_patch(test_owner, test_restaurant_exception)
     assert test_restaurant_exception.date == datetime.strptime(body["date"], "%Y-%m-%d").date()
 
 
-def test_RestaurantExceptionViewSet_patch_returns_404_for_not_owner(test_user, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_patch_manager(test_membership_manager, test_restaurant_exception):
     client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", {})
+    client.force_authenticate(test_membership_manager.user)
+
+    body = {
+        "date": "3005-05-26",
+    }
+    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    test_restaurant_exception.refresh_from_db()
+    assert response.status_code == 200
+    assert test_restaurant_exception.date == datetime.strptime(body["date"], "%Y-%m-%d").date()
+
+
+def test_RestaurantExceptionViewSet_patch_staff(test_membership_staff, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+
+    body = {
+        "date": "3005-05-26",
+    }
+    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    assert response.status_code == 403
+
+
+def test_RestaurantExceptionViewSet_patch_return_404_for_not_owner_or_member(test_user_2, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    body = {
+        "date": "3005-05-26",
+    }
+    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
     assert response.status_code == 404
 
 
@@ -1408,7 +1501,7 @@ def test_RestaurantExceptionViewSet_patch_requires_authentication(test_restauran
 
 
 # Delete method
-def test_RestaurantExceptionViewSet_delete(test_owner, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_delete_owner(test_owner, test_restaurant_exception):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.delete(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
@@ -1416,9 +1509,24 @@ def test_RestaurantExceptionViewSet_delete(test_owner, test_restaurant_exception
     assert not RestaurantException.objects.filter(id=test_restaurant_exception.id).exists()
 
 
-def test_RestaurantExceptionViewSet_delete_returns_404_for_not_owner(test_user, test_restaurant_exception):
+def test_RestaurantExceptionViewSet_delete_manager(test_membership_manager, test_restaurant_exception):
     client = APIClient()
-    client.force_authenticate(test_user)
+    client.force_authenticate(test_membership_manager.user)
+    response = client.delete(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 204
+    assert not RestaurantException.objects.filter(id=test_restaurant_exception.id).exists()
+
+
+def test_RestaurantExceptionViewSet_delete_staff(test_membership_staff, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_membership_staff.user)
+    response = client.delete(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
+    assert response.status_code == 403
+
+
+def test_RestaurantExceptionViewSet_delete_returns_404_for_not_owner_or_member(test_user_2, test_restaurant_exception):
+    client = APIClient()
+    client.force_authenticate(test_user_2)
     response = client.delete(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/")
     assert response.status_code == 404
 
