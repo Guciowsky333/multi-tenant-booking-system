@@ -46,6 +46,10 @@ class RestaurantTable(models.Model):
 
 
 class RestaurantBreak(models.Model):
+    """
+    In this time booking reservation on the restaurant will not be possible
+    """
+
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     start = models.TimeField()
     end = models.TimeField()

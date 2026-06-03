@@ -44,11 +44,18 @@ class RestaurantTableViewSet(viewsets.ModelViewSet):
 
 
 class RestaurantBreakViewSet(viewsets.ModelViewSet):
+    """
+    The same access rules as AvailableRuleViewSet.
+    For public data use GET /api/restaurants/{id}/
+    """
+
     serializer_class = RestaurantBreakSerializer
-    permission_classes = [IsAuthenticated, IsRestaurantRelatedOwner]
+    permission_classes = [IsAuthenticated, IsRestaurantOwnerOrManager]
 
     def get_queryset(self):
-        return RestaurantBreak.objects.filter(restaurant__owner=self.request.user)
+        return RestaurantBreak.objects.filter(restaurant__owner=self.request.user) | RestaurantBreak.objects.filter(
+            restaurant__memberships__user=self.request.user
+        )
 
 
 class RestaurantExceptionViewSet(viewsets.ModelViewSet):
