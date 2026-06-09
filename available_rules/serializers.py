@@ -21,8 +21,23 @@ class AvailableRuleSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, data):
-        opening_time = data.get("opening_time")
-        closing_time = data.get("closing_time")
+        if self.instance:
+            """
+            If an instance already exists and the user does not provide
+            opening_time or closing_time (e.g. in a PATCH request),
+            the missing values are taken from the existing instance
+            so validation can be performed on the final state of the object.
+            """
+            opening_time = data.get("opening_time")
+            closing_time = data.get("closing_time")
+            if opening_time is None:
+                opening_time = self.instance.opening_time
+            if closing_time is None:
+                closing_time = self.instance.closing_time
+
+        else:
+            opening_time = data.get("opening_time")
+            closing_time = data.get("closing_time")
         if opening_time and closing_time:
             if closing_time <= opening_time:
                 raise serializers.ValidationError("Closing time must be after opening time")

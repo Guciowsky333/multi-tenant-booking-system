@@ -363,6 +363,28 @@ def test_AvailableRuleViewSet_patch_manager(test_membership_manager, test_availa
     assert test_available_rule.day_of_week == body["day_of_week"]
 
 
+@pytest.mark.parametrize(
+    "payload, expected_status",
+    [
+        # In our test_available_rule closing_time = 22:00 so changing opening_time to 10:00 is allowed
+        ({"opening_time": "10:00"}, 200),
+        # opening_time > closing_time error
+        ({"opening_time": "23:00"}, 400),
+        # In our test_available_rule opening_time = 8:00 so changing closing_time to 20:00 is allowed
+        ({"closing_time": "20:00"}, 200),
+        # closing_time < opening_time error
+        ({"closing_time": "7:00"}, 400),
+    ],
+)
+def test_AvailableRuleViewSet_patch_only_opening_time_or_only_closing_time(
+    payload, expected_status, test_owner, test_available_rule
+):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.patch(f"/api/available_rules/{test_available_rule.id}/", payload)
+    assert response.status_code == expected_status
+
+
 def test_AvailableRuleViewSet_patch_staff(test_membership_staff, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_membership_staff.user)
