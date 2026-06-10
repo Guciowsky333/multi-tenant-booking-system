@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
+from available_rules.services import validate_break
 
 
 class AvailableRuleSerializer(serializers.ModelSerializer):
@@ -65,16 +66,40 @@ class RestaurantBreakSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RestaurantBreak
-        fields = ["restaurant", "restaurant_name", "start", "end"]
+        fields = ["restaurant", "restaurant_name", "start", "end", "day_of_week"]
         read_only_fields = ["restaurant_name"]
 
     def validate(self, data):
-        start = data.get("start")
-        end = data.get("end")
+        if self.instance:
+            """
+            If an instance already exists and the user does not provide
+            start or end (e.g. in a PATCH request),
+            the missing values are taken from the existing instance
+            so validation can be performed on the final state of the object.
+            """
+            start = data.get("start") or self.instance.start
+            end = data.get("end") or self.instance.end
+            restaurant = data.get("restaurant") or self.instance.restaurant
+            day_of_week = data.get("day_of_week") or self.instance.day_of_week
+
+        else:
+            start = data.get("start")
+            end = data.get("end")
+            restaurant = data.get("restaurant")
+            day_of_week = data.get("day_of_week")
 
         if start and end:
             if end <= start:
                 raise serializers.ValidationError("Start time must be before end time")
+
+        # validation from services
+        try:
+            validate_break(
+                restaurant=restaurant.id, day_of_week=day_of_week, start=start, end=end, instance=self.instance
+            )
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
+
         return data
 
 

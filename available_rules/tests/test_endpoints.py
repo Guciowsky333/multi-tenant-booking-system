@@ -832,22 +832,22 @@ def test_RestaurantTableViewSet_delete_not_found(test_owner):
 # Tests for /api/available_rules/restaurant_break/
 
 
-def test_RestaurantBreakViewSet_post_owner(test_owner, test_restaurant):
+def test_RestaurantBreakViewSet_post_owner(test_owner, test_restaurant, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_owner)
 
-    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25"}
+    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25", "day_of_week": 1}
 
     response = client.post("/api/available_rules/restaurant_break/", body)
     assert response.status_code == 201
     assert RestaurantBreak.objects.filter(restaurant=test_restaurant).exists()
 
 
-def test_RestaurantBreakViewSet_post_manager(test_membership_manager, test_restaurant):
+def test_RestaurantBreakViewSet_post_manager(test_membership_manager, test_restaurant, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_membership_manager.user)
 
-    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25"}
+    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25", "day_of_week": 1}
 
     response = client.post("/api/available_rules/restaurant_break/", body)
     assert response.status_code == 201
@@ -858,7 +858,7 @@ def test_RestaurantBreakViewSet_post_staff(test_membership_staff, test_restauran
     client = APIClient()
     client.force_authenticate(test_membership_staff.user)
 
-    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25"}
+    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25", "day_of_week": 1}
 
     response = client.post("/api/available_rules/restaurant_break/", body)
     assert response.status_code == 403
@@ -867,7 +867,7 @@ def test_RestaurantBreakViewSet_post_staff(test_membership_staff, test_restauran
 def test_RestaurantBreakViewSet_post_not_owner_or_member(test_user_2, test_restaurant):
     client = APIClient()
     client.force_authenticate(test_user_2)
-    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25"}
+    body = {"restaurant": test_restaurant.id, "start": "10:00", "end": "10:25", "day_of_week": 1}
     response = client.post("/api/available_rules/restaurant_break/", body)
     assert response.status_code == 403
 
@@ -882,24 +882,54 @@ def test_RestaurantBreakViewSet_post_requires_authentication():
     "payload, expected_status",
     [
         # Missing restaurant
-        ({"restaurant": "", "start": "10:00", "end": "10:25"}, 400),
+        ({"restaurant": "", "start": "10:00", "end": "10:25", "day_of_week": 1}, 400),
         # Missing start
-        ({"restaurant": 1, "start": "", "end": "10:25"}, 400),
+        ({"restaurant": 1, "start": "", "end": "10:25", "day_of_week": 1}, 400),
         # Missing end
-        ({"restaurant": 1, "start": "10:00", "end": ""}, 400),
+        ({"restaurant": 1, "start": "10:00", "end": "", "day_of_week": 1}, 400),
+        # Missing day_of_week
+        ({"restaurant": 1, "start": "10:00", "end": "10:25", "day_of_week": ""}, 400),
+        # Incorrect day_of_week allowed 1-7 from Monday=1 to Sunday=7
+        ({"restaurant": 1, "start": "10:00", "end": "10:25", "day_of_week": 8}, 400),
+        # Restaurant does not have available rules for day = 2 so user can not create break for that day
+        ({"restaurant": 1, "start": "10:00", "end": "10:25", "day_of_week": 2}, 400),
+        # Provided hours of break are out of the time when restaurant is open that day (8-22)
+        ({"restaurant": 1, "start": "21:40", "end": "22:01", "day_of_week": 1}, 400),
         # Restaurant does not exist return 403
-        ({"restaurant": 2, "start": "10:00", "end": "10:25"}, 403),
+        ({"restaurant": 2, "start": "10:00", "end": "10:25", "day_of_week": 1}, 403),
         # Incorrect data format start or end
-        ({"restaurant": 1, "start": "10:00", "end": "wrong_format"}, 400),
+        ({"restaurant": 1, "start": "10:00", "end": "wrong_format", "day_of_week": 1}, 400),
         # Start before end
-        ({"restaurant": 1, "start": "10:00", "end": "9:59"}, 400),
+        ({"restaurant": 1, "start": "10:00", "end": "9:59", "day_of_week": 1}, 400),
     ],
 )
-def test_RestaurantBreakViewSet_post_invalid_data(payload, expected_status, test_owner, test_restaurant):
+def test_RestaurantBreakViewSet_post_invalid_data(
+    payload, expected_status, test_owner, test_restaurant, test_available_rule
+):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.post("/api/available_rules/restaurant_break/", payload)
     assert response.status_code == expected_status
+
+
+def test_RestaurantBreakViewSet_post_breaks_overlap_each_other(
+    test_owner, test_restaurant, test_available_rule, test_exist_break
+):
+    """
+    In this test test_restaurant already have a break test_exist_break from 18:00 to 18:30
+    and we chack whether endpoint correctly return 400 when we try to overlap new break to this break that already
+    exist in the restaurant.
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "restaurant": test_restaurant.id,
+        "start": "18:25",
+        "end": "19:00",
+        "day_of_week": 1,
+    }
+    response = client.post("/api/available_rules/restaurant_break/", body)
+    assert response.status_code == 400
 
 
 # Get method
@@ -978,10 +1008,10 @@ def test_RestaurantBreakViewSet_retrive_return_404_for_not_owner_or_member(test_
 
 
 # Put method
-def test_RestaurantBreakViewSet_put_owner(test_owner, test_restaurant_break):
+def test_RestaurantBreakViewSet_put_owner(test_owner, test_restaurant_break, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_owner)
-    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25"}
+    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25", "day_of_week": 1}
     response = client.put(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     test_restaurant_break.refresh_from_db()
     assert response.status_code == 200
@@ -991,10 +1021,10 @@ def test_RestaurantBreakViewSet_put_owner(test_owner, test_restaurant_break):
     assert test_restaurant_break.end == time(16, 25)
 
 
-def test_RestaurantBreakViewSet_put_manager(test_membership_manager, test_restaurant_break):
+def test_RestaurantBreakViewSet_put_manager(test_membership_manager, test_restaurant_break, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_membership_manager.user)
-    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25"}
+    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25", "day_of_week": 1}
     response = client.put(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     test_restaurant_break.refresh_from_db()
     assert response.status_code == 200
@@ -1007,7 +1037,7 @@ def test_RestaurantBreakViewSet_put_manager(test_membership_manager, test_restau
 def test_RestaurantBreakViewSet_put_staff(test_membership_staff, test_restaurant_break):
     client = APIClient()
     client.force_authenticate(test_membership_staff.user)
-    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25"}
+    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25", "day_of_week": 1}
 
     response = client.put(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     assert response.status_code == 403
@@ -1016,7 +1046,7 @@ def test_RestaurantBreakViewSet_put_staff(test_membership_staff, test_restaurant
 def test_RestaurantBreakViewSet_put_return_404_for_not_owner_or_member(test_user_2, test_restaurant_break):
     client = APIClient()
     client.force_authenticate(test_user_2)
-    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25"}
+    body = {"restaurant": test_restaurant_break.restaurant.id, "start": "15:00", "end": "16:25", "day_of_week": 1}
     response = client.put(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     assert response.status_code == 404
 
@@ -1031,21 +1061,29 @@ def test_RestaurantBreakViewSet_put_requires_authentication():
     "payload, expected_status",
     [
         # Missing restaurant
-        ({"restaurant": "", "start": "10:00", "end": "10:25"}, 400),
+        ({"restaurant": "", "start": "10:00", "end": "10:25", "day_of_week": 1}, 400),
         # Missing start
-        ({"restaurant": 1, "start": "", "end": "10:25"}, 400),
+        ({"restaurant": 1, "start": "", "end": "10:25", "day_of_week": 1}, 400),
         # Missing end
-        ({"restaurant": 1, "start": "10:00", "end": ""}, 400),
-        # Restaurant does not exist
-        ({"restaurant": 2, "start": "10:00", "end": "10:25"}, 400),
+        ({"restaurant": 1, "start": "10:00", "end": "", "day_of_week": 1}, 400),
+        # Missing day_of_week
+        ({"restaurant": 1, "start": "10:00", "end": "10:25", "day_of_week": ""}, 400),
+        # Incorrect day_of_week allowed 1-7 from Monday=1 to Sunday=7
+        ({"restaurant": 1, "start": "10:00", "end": "10:25", "day_of_week": 8}, 400),
+        # Restaurant does not have available rules for day = 2 so user can not create break for that day
+        ({"restaurant": 1, "start": "10:00", "end": "10:25", "day_of_week": 2}, 400),
+        # Provided hours of break are out of the time when restaurant is open that day (8-22)
+        ({"restaurant": 1, "start": "21:40", "end": "22:01", "day_of_week": 1}, 400),
+        # Restaurant does not exist return 400
+        ({"restaurant": 2, "start": "10:00", "end": "10:25", "day_of_week": 1}, 400),
         # Incorrect data format start or end
-        ({"restaurant": 1, "start": "10:00", "end": "wrong_format"}, 400),
+        ({"restaurant": 1, "start": "10:00", "end": "wrong_format", "day_of_week": 1}, 400),
         # Start before end
-        ({"restaurant": 1, "start": "10:00", "end": "9:59"}, 400),
+        ({"restaurant": 1, "start": "10:00", "end": "9:59", "day_of_week": 1}, 400),
     ],
 )
 def test_RestaurantBreakViewSet_put_invalid_data(
-    payload, expected_status, test_owner, test_restaurant, test_restaurant_break
+    payload, expected_status, test_owner, test_restaurant, test_restaurant_break, test_available_rule
 ):
     client = APIClient()
     client.force_authenticate(test_owner)
@@ -1056,10 +1094,10 @@ def test_RestaurantBreakViewSet_put_invalid_data(
 # Patch method
 
 
-def test_RestaurantBreakViewSet_patch_owner(test_owner, test_restaurant_break):
+def test_RestaurantBreakViewSet_patch_owner(test_owner, test_restaurant_break, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_owner)
-    body = {"start": "15:00", "end": "15:25"}
+    body = {"start": "15:00", "end": "15:25", "day_of_week": 1}
     response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     test_restaurant_break.refresh_from_db()
     assert response.status_code == 200
@@ -1067,10 +1105,10 @@ def test_RestaurantBreakViewSet_patch_owner(test_owner, test_restaurant_break):
     assert test_restaurant_break.end == time(15, 25)
 
 
-def test_RestaurantBreakViewSet_patch_manager(test_membership_manager, test_restaurant_break):
+def test_RestaurantBreakViewSet_patch_manager(test_membership_manager, test_restaurant_break, test_available_rule):
     client = APIClient()
     client.force_authenticate(test_membership_manager.user)
-    body = {"start": "15:00", "end": "15:25"}
+    body = {"start": "15:00", "end": "15:25", "day_of_week": 1}
     response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     test_restaurant_break.refresh_from_db()
     assert response.status_code == 200
@@ -1081,7 +1119,7 @@ def test_RestaurantBreakViewSet_patch_manager(test_membership_manager, test_rest
 def test_RestaurantBreakViewSet_patch_staff(test_membership_staff, test_restaurant_break):
     client = APIClient()
     client.force_authenticate(test_membership_staff.user)
-    body = {"start": "15:00", "end": "16:25"}
+    body = {"start": "15:00", "end": "16:25", "day_of_week": 1}
     response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     assert response.status_code == 403
 
@@ -1089,7 +1127,7 @@ def test_RestaurantBreakViewSet_patch_staff(test_membership_staff, test_restaura
 def test_RestaurantBreakViewSet_patch_return_404_for_not_owner_or_member(test_user_2, test_restaurant_break):
     client = APIClient()
     client.force_authenticate(test_user_2)
-    body = {"start": "15:00", "end": "16:25"}
+    body = {"start": "15:00", "end": "16:25", "day_of_week": 1}
     response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     assert response.status_code == 404
 
@@ -1103,7 +1141,7 @@ def test_RestaurantBreakViewSet_patch_requires_authentication():
 def test_RestaurantBreakViewSet_patch_start_before_end(test_owner, test_restaurant_break):
     client = APIClient()
     client.force_authenticate(test_owner)
-    body = {"start": "15:00", "end": "14:59"}
+    body = {"start": "15:00", "end": "14:59", "day_of_week": 1}
     response = client.patch(f"/api/available_rules/restaurant_break/{test_restaurant_break.id}/", body)
     assert response.status_code == 400
 
