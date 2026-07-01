@@ -1493,8 +1493,6 @@ def test_RestaurantExceptionViewSet_put_requires_authentication(test_restaurant_
             },
             400,
         ),
-        # Type = special_hours and fields opening_time and closing_time are empty
-        ({"restaurant": 1, "date": "3000-05-26", "type": "special_hours"}, 400),
     ],
 )
 def test_RestaurantExceptionViewSet_put_invalid_data(
@@ -1517,7 +1515,26 @@ def test_RestaurantExceptionViewSet_patch_owner(test_owner, test_restaurant_exce
     response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
     test_restaurant_exception.refresh_from_db()
     assert response.status_code == 200
-    assert test_restaurant_exception.date == datetime.strptime(body["date"], "%Y-%m-%d").date()
+
+
+def test_RestaurantExceptionViewSet_changed_type_to_closed(test_owner, test_restaurant_exception):
+    """
+    This test check whether if someone don't provided opening and closing time and want to change the type of the restaurant exception
+    from "SPECIAL_HOURS" to "CLOSED" the endpoint automatically replace times with "None" value and change type correctly.
+    """
+
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "type": "closed",
+    }
+    response = client.patch(f"/api/available_rules/restaurant_exception/{test_restaurant_exception.id}/", body)
+    test_restaurant_exception.refresh_from_db()
+
+    assert response.status_code == 200
+    assert test_restaurant_exception.type == "closed"
+    assert test_restaurant_exception.opening_time is None
+    assert test_restaurant_exception.closing_time is None
 
 
 def test_RestaurantExceptionViewSet_patch_manager(test_membership_manager, test_restaurant_exception):

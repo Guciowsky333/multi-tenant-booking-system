@@ -37,5 +37,7 @@ def test_restaurant_exception(db, test_restaurant):
     return RestaurantException.objects.create(
         restaurant=test_restaurant,
         date=tomorrow,
-        type="closed",
+        type="special_hours",
+        opening_time="10:00",
+        closing_time="20:00",
     )
