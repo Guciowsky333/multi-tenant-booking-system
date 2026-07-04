@@ -7,6 +7,10 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
       db:
         image: postgres:16
         env:
@@ -28,6 +32,9 @@ jobs:
       POSTGRES_PASSWORD: test_postgres
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
+
+
+
 
     steps:
       - name: Take code
