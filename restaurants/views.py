@@ -4,6 +4,7 @@ from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -13,6 +14,10 @@ from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permisions import IsRestaurantManagerOrOwner
 from restaurants.serializers import CuisineTypeSerializer, RestaurantSerializer
+
+
+class RestaurantPagination(PageNumberPagination):
+    page_size = 10
 
 
 # Create your views here.
@@ -38,9 +43,10 @@ class AllCuisinesTypeView(APIView):
 class RestaurantViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = RestaurantFilter
-    queryset = Restaurant.objects.all()
+    queryset = Restaurant.objects.all().order_by("id")
     serializer_class = RestaurantSerializer
     parser_classes = [FormParser, MultiPartParser]
+    pagination_class = RestaurantPagination
 
     def get_permissions(self):
         if self.action in ["update", "partial_update", "destroy"]:
@@ -82,8 +88,17 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         if data is None:
             # If data are not in Redis we take them from database and then save them to Redis for 5 minutes
             queryset = self.filter_queryset(self.get_queryset())
-            serializer = self.get_serializer(queryset, many=True)
-            data = serializer.data
+            page = self.paginate_queryset(queryset)
+            serializer = self.get_serializer(page, many=True)
+
+            # Save metadata to cache
+            data = {
+                "count": self.paginator.page.paginator.count,
+                "next": self.paginator.get_next_link(),
+                "previous": self.paginator.get_previous_link(),
+                "results": serializer.data,
+            }
+
             cache.set(cache_key, data, timeout=300)
 
         return Response(data)
