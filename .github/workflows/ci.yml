@@ -55,6 +55,9 @@ jobs:
       - name: Ruff check
         run: ruff check .
 
+      - name: Run migrations
+        run: python manage.py migrate
+
       - name: Tests
         run: pytest
 
