@@ -23,7 +23,12 @@ def test_restaurant_table(db, test_restaurant):
 
 @pytest.fixture
 def test_restaurant_break(db, test_restaurant):
-    return RestaurantBreak.objects.create(restaurant=test_restaurant, start="9:30", end="10:00")
+    return RestaurantBreak.objects.create(restaurant=test_restaurant, start="9:30", end="10:00", day_of_week=1)
+
+
+@pytest.fixture
+def test_exist_break(db, test_restaurant):
+    return RestaurantBreak.objects.create(restaurant=test_restaurant, start="18:00", end="18:30", day_of_week=1)
 
 
 @pytest.fixture
@@ -32,5 +37,7 @@ def test_restaurant_exception(db, test_restaurant):
     return RestaurantException.objects.create(
         restaurant=test_restaurant,
         date=tomorrow,
-        type="closed",
+        type="special_hours",
+        opening_time="10:00",
+        closing_time="20:00",
     )

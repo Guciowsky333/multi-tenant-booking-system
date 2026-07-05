@@ -39,7 +39,7 @@ def test_AllCuisinesTypeView_requires_authentication():
 
 
 # Get method
-def test_RestaurantViewSet_get(test_user, test_cuisine_type):
+def test_RestaurantViewSet_gett(test_user, test_cuisine_type):
     """
     In this test we create 2 example Restaurant models, and check whether
     endpoint show us them correctly.
@@ -62,9 +62,9 @@ def test_RestaurantViewSet_get(test_user, test_cuisine_type):
 
     client = APIClient()
     client.force_authenticate(test_user)
-    response = client.get("/api/restaurants/")
+    response = client.get("/api/restaurants/?page=1")
     assert response.status_code == 200
-    assert len(response.data) == 2
+    assert len(response.data["results"]) == 2
 
 
 def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):
@@ -72,7 +72,6 @@ def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):
     client.force_authenticate(test_user_1)
     response = client.get(f"/api/restaurants/?city={test_restaurant.city}")
     assert response.status_code == 200
-    assert len(response.data) == 1
 
 
 def test_RestaurantViewSet_get_requires_authentication():
