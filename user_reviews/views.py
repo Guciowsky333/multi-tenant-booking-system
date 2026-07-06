@@ -24,3 +24,6 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if self.action == "destroy":
             return Review.objects.all()
         return Review.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

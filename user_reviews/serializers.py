@@ -16,4 +16,12 @@ class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = ["id", "restaurant", "restaurant_name", "user", "user_email", "comment", "rating"]
-        read_only_fields = ["restaurant_name", "user_email"]
+        read_only_fields = ["restaurant_name", "user_email", "user"]
+
+    def validate(self, data):
+        if not self.instance:
+            user = self.context["request"].user
+            restaurant = data["restaurant"]
+            if Review.objects.filter(restaurant=restaurant, user=user).exists():
+                raise serializers.ValidationError("You already have writen a review of this restaurant")
+        return data
