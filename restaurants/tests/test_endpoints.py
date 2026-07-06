@@ -103,9 +103,9 @@ def test_RestaurantViewSet_get_revies(test_restaurant, test_user, test_review_1,
     """
     client = APIClient()
     client.force_authenticate(test_user)
-    response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/")
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/?page=1")
     assert response.status_code == 200
-    assert len(response.data) == 2
+    assert len(response.data["results"]) == 2
 
 
 def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):

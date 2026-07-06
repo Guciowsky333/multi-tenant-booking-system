@@ -110,5 +110,10 @@ class RestaurantViewSet(viewsets.ModelViewSet):
     def reviews(self, request, pk=None):
         restaurant = self.get_object()
         all_reviews = Review.objects.filter(restaurant=restaurant).order_by("-created_at")
+        page = self.paginate_queryset(all_reviews)
+        if page is not None:
+            serializer = ReviewSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
         serializer = ReviewSerializer(all_reviews, many=True)
         return Response(serializer.data)
