@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Avg
 
 from accounts.models import CustomUser
 
@@ -29,6 +30,15 @@ class Restaurant(models.Model):
     @property
     def full_address(self):
         return f"{self.city.upper()}, {self.address}"
+
+    @property
+    def average_review_rating(self):
+        """
+        Returns the average rating of the restaurant.
+        """
+        average = self.reviews.aggregate(Avg("rating"))
+        # If restaurant has not any reviews returns 0
+        return round(average["rating__avg"], 2) if average["rating__avg"] else 0
 
     def __str__(self):
         return self.name
