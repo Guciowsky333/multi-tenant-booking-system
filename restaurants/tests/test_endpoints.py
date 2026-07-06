@@ -89,10 +89,23 @@ def test_RestaurantViewSet_get_returns_average_rating(test_user, test_user_1, te
     )
     client = APIClient()
     client.force_authenticate(test_user)
+    test_restaurant.refresh_from_db
     response = client.get("/api/restaurants/?page=1")
     assert response.status_code == 200
     restaurant = response.data["results"][0]
     assert restaurant["average_review_rating"] == 7.5
+
+
+def test_RestaurantViewSet_get_revies(test_restaurant, test_user, test_review_1, test_review_2):
+    """
+    In this test we create 2 reviews of test_restaurant and check whether our endpoint
+    show us them correctly.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/")
+    assert response.status_code == 200
+    assert len(response.data) == 2
 
 
 def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):

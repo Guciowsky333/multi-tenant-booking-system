@@ -4,6 +4,7 @@ from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +15,8 @@ from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permisions import IsRestaurantManagerOrOwner
 from restaurants.serializers import CuisineTypeSerializer, RestaurantSerializer
+from user_reviews.models import Review
+from user_reviews.serializers import ReviewSerializer
 
 
 class RestaurantPagination(PageNumberPagination):
@@ -102,3 +105,10 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             cache.set(cache_key, data, timeout=300)
 
         return Response(data)
+
+    @action(detail=True, methods=["get"], url_path="reviews")
+    def reviews(self, request, pk=None):
+        restaurant = self.get_object()
+        all_reviews = Review.objects.filter(restaurant=restaurant).order_by("-created_at")
+        serializer = ReviewSerializer(all_reviews, many=True)
+        return Response(serializer.data)
