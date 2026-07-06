@@ -39,7 +39,7 @@ def test_AllCuisinesTypeView_requires_authentication():
 
 
 # Get method
-def test_RestaurantViewSet_gett(test_user, test_cuisine_type):
+def test_RestaurantViewSet_get(test_user, test_cuisine_type):
     """
     In this test we create 2 example Restaurant models, and check whether
     endpoint show us them correctly.
