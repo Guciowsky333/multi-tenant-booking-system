@@ -77,7 +77,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         params = request.query_params
 
-        # Sorting parms because order of filters does not matter
+        # Sorting parms because order of filters does not matter in cache key
         sorted_parms = urlencode(sorted(params.items()))
 
         cache_key = "restaurants_all" if not sorted_parms else f"restaurants_all_{sorted_parms}"

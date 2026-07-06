@@ -2,6 +2,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from restaurants.models import CuisineType, Restaurant
+from user_reviews.models import Review
 
 
 # Test for api/restaurants/all_cuisine_type/
@@ -65,6 +66,33 @@ def test_RestaurantViewSet_get(test_user, test_cuisine_type):
     response = client.get("/api/restaurants/?page=1")
     assert response.status_code == 200
     assert len(response.data["results"]) == 2
+
+
+def test_RestaurantViewSet_get_returns_average_rating(test_user, test_user_1, test_restaurant):
+    """
+    In this test we create 2 reviews of test_restaurant and check whether our endpoint
+    show us average rating correct.
+
+    The first review has 8 rating and the second has 7 so our average rating should be 7.5
+    """
+    # First review
+    Review.objects.create(
+        restaurant=test_restaurant,
+        user=test_user,
+        rating=8,
+    )
+    # Second review
+    Review.objects.create(
+        restaurant=test_restaurant,
+        user=test_user_1,
+        rating=7,
+    )
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.get("/api/restaurants/?page=1")
+    assert response.status_code == 200
+    restaurant = response.data["results"][0]
+    assert restaurant["average_review_rating"] == 7.5
 
 
 def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):
