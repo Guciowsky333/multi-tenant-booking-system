@@ -4,6 +4,7 @@ from django.core.cache import cache
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +15,7 @@ from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permisions import IsRestaurantManagerOrOwner
 from restaurants.serializers import CuisineTypeSerializer, RestaurantSerializer
+from user_reviews.serializers import ReviewSerializer
 
 
 class RestaurantPagination(PageNumberPagination):
@@ -101,4 +103,26 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
             cache.set(cache_key, data, timeout=300)
 
+        return Response(data)
+
+    @action(detail=True, methods=["get"], url_path="reviews")
+    def reviews(self, request, pk=None):
+        page_number = request.query_params.get("page", 1)
+        cache_key = f"restaurant_{pk}_reviews_page_{page_number}"
+        data = cache.get(cache_key)
+        # If data are in cache we take them form there
+        # If data with our cache_key are empty we take them form database and then set in cache
+        if data is None:
+            restaurant = self.get_object()
+            all_reviews = restaurant.reviews.order_by("-created_at")
+            page = self.paginate_queryset(all_reviews)
+            serializer = ReviewSerializer(page, many=True)
+            # Store metadata alongside results to preserve pagination info in cache
+            data = {
+                "count": self.paginator.page.paginator.count,
+                "next": self.paginator.get_next_link(),
+                "previous": self.paginator.get_previous_link(),
+                "results": serializer.data,
+            }
+            cache.set(cache_key, data, timeout=300)
         return Response(data)
