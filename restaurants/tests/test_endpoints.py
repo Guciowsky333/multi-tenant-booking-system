@@ -89,23 +89,29 @@ def test_RestaurantViewSet_get_returns_average_rating(test_user, test_user_1, te
     )
     client = APIClient()
     client.force_authenticate(test_user)
-    test_restaurant.refresh_from_db
     response = client.get("/api/restaurants/?page=1")
     assert response.status_code == 200
     restaurant = response.data["results"][0]
     assert restaurant["average_review_rating"] == 7.5
 
 
-def test_RestaurantViewSet_get_revies(test_restaurant, test_user, test_review_1, test_review_2):
+def test_restaurant_average_rating_after_new_review(test_user_2, test_restaurant, test_review_1, test_review_2):
     """
-    In this test we create 2 reviews of test_restaurant and check whether our endpoint
-    show us them correctly.
+    When someone add, update or delete review of the restaurant average_rating is changed so cache
+    that stores data about all restaurants should be cleaned.
     """
     client = APIClient()
-    client.force_authenticate(test_user)
-    response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/?page=1")
-    assert response.status_code == 200
-    assert len(response.data["results"]) == 2
+    client.force_authenticate(test_user_2)
+    # Firs two reviews test_review_1 and test_review_2 avg = 7.5
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/")
+    assert response.data["average_review_rating"] == 7.5
+
+    body = {"restaurant": test_restaurant.id, "rating": 6}
+    # Create new review this should cleand cache
+    client.post("/api/user_reviews/", body)
+    # New avg = 7
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/")
+    assert response.data["average_review_rating"] == 7
 
 
 def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):
@@ -377,3 +383,40 @@ def test_RestaurantViewSet_delete_requires_authentication():
     client = APIClient()
     response = client.delete("/api/restaurants/")
     assert response.status_code == 401
+
+
+# Test for api/restaurants/id/reviews/
+
+
+def test_RestaurantViewSet_get_revies(test_restaurant, test_user, test_review_1, test_review_2):
+    """
+    In this test we create 2 reviews of test_restaurant and check whether our endpoint
+    show us them correctly.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/")
+    assert response.status_code == 200
+    assert len(response.data["results"]) == 2
+
+
+def test_RestaurantViewSet_get_revies_cache_invalidation(
+    test_restaurant, test_user, test_user_2, test_review_1, test_review_2
+):
+    """
+    When someone add, destroy or update a review of the restaurant cache should be cleaned so endpoint
+    should return updated lists of reviews
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    # Firs request save 2 reviews in cache test_review_1 and test_review_2
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/")
+    assert response.data["count"] == 2
+    # Create new review that should clean cache
+    client.force_authenticate(test_user_2)
+    body = {"restaurant": test_restaurant.id, "rating": 5}
+    client.post("/api/user_reviews/", body)
+
+    # Send second request should return 3 reviews not 2 from cache
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/")
+    assert response.data["count"] == 3

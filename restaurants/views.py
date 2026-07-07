@@ -15,7 +15,6 @@ from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permisions import IsRestaurantManagerOrOwner
 from restaurants.serializers import CuisineTypeSerializer, RestaurantSerializer
-from user_reviews.models import Review
 from user_reviews.serializers import ReviewSerializer
 
 
@@ -108,12 +107,22 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="reviews")
     def reviews(self, request, pk=None):
-        restaurant = self.get_object()
-        all_reviews = Review.objects.filter(restaurant=restaurant).order_by("-created_at")
-        page = self.paginate_queryset(all_reviews)
-        if page is not None:
+        page_number = request.query_params.get("page", 1)
+        cache_key = f"restaurant_{pk}_reviews_page_{page_number}"
+        data = cache.get(cache_key)
+        # If data are in cache we take them form there
+        # If data with our cache_key are empty we take them form database and then set in cache
+        if data is None:
+            restaurant = self.get_object()
+            all_reviews = restaurant.reviews.order_by("-created_at")
+            page = self.paginate_queryset(all_reviews)
             serializer = ReviewSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = ReviewSerializer(all_reviews, many=True)
-        return Response(serializer.data)
+            # Store metadata alongside results to preserve pagination info in cache
+            data = {
+                "count": self.paginator.page.paginator.count,
+                "next": self.paginator.get_next_link(),
+                "previous": self.paginator.get_previous_link(),
+                "results": serializer.data,
+            }
+            cache.set(cache_key, data, timeout=300)
+        return Response(data)

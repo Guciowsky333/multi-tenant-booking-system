@@ -27,17 +27,25 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return Review.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
+        # Set request user as owner
+        serializer.save(user=self.request.user)
         # Clear cache because average_review_rating depends on reviews
         cache.delete_pattern("restaurants_all*")
-        # Set request user as owner of review
-        serializer.save(user=self.request.user)
+        # Cleat cache all reviews of the restaurant
+        cache.delete_pattern(f"restaurant_{serializer.validated_data['restaurant'].id}_reviews_*")
 
     def perform_update(self, serializer):
+        serializer.save()
         # Clear cache because average_review_rating depends on reviews
         cache.delete_pattern("restaurants_all*")
-        serializer.save()
+        # Cleat cache all reviews of the restaurant
+        restaurant_id = serializer.instance.restaurant.id
+        cache.delete_pattern(f"restaurant_{restaurant_id}_reviews_*")
 
     def perform_destroy(self, instance):
+        restaurant_id = instance.restaurant.id
+        instance.delete()
         # Clear cache because average_review_rating depends on reviews
         cache.delete_pattern("restaurants_all*")
-        instance.delete()
+        # Cleat cache all reviews of the restaurant
+        cache.delete_pattern(f"restaurant_{restaurant_id}_reviews_*")
