@@ -12,6 +12,11 @@ def test_owner(db):
 
 
 @pytest.fixture
+def test_owner_1(db):
+    return CustomUser.objects.create_user(email="test1@test1.com", password="Test_password")
+
+
+@pytest.fixture
 def test_user(db):
     return CustomUser.objects.create_user(email="test@test1.com", password="Test_password")
 
@@ -44,6 +49,18 @@ def test_restaurant(db, test_owner, test_cuisine_type):
         address="test_address",
         city="test_city",
         owner=test_owner,
+        cuisine_type=test_cuisine_type,
+    )
+
+
+@pytest.fixture
+def test_restaurant_1(db, test_owner_1, test_cuisine_type):
+    return Restaurant.objects.create(
+        id=2,
+        name="test_restaurant_1",
+        address="test_address",
+        city="test_city",
+        owner=test_owner_1,
         cuisine_type=test_cuisine_type,
     )
 
