@@ -40,6 +40,8 @@ class IsRestaurantOwnerOrManager(permissions.BasePermission):
         return True
 
     def has_object_permission(self, request, view, obj):
+        if view.action == "retrieve":
+            return True
         # Take restaurant from the Menu or Dish model
         restaurant = obj.restaurant if hasattr(obj, "restaurant") else obj.menu.restaurant
         return (
