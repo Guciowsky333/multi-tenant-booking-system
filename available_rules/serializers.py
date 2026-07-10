@@ -45,6 +45,12 @@ class AvailableRuleSerializer(serializers.ModelSerializer):
         return data
 
 
+class AvailableRuleBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AvailableRule
+        fields = ["id", "day_of_week", "opening_time", "closing_time"]
+
+
 class RestaurantTableSerializer(serializers.ModelSerializer):
     restaurant_name = serializers.SerializerMethodField()
 
@@ -56,6 +62,12 @@ class RestaurantTableSerializer(serializers.ModelSerializer):
         fields = ["id", "restaurant", "restaurant_name", "table_number", "seats"]
         read_only_fields = ["id", "restaurant_name"]
         extra_kwargs = {"table_number": {"help_text": "This filed must be unique per restaurant"}}
+
+
+class RestaurantTableBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RestaurantTable
+        fields = ["id", "table_number", "seats"]
 
 
 class RestaurantBreakSerializer(serializers.ModelSerializer):
@@ -101,6 +113,12 @@ class RestaurantBreakSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(str(e))
 
         return data
+
+
+class RestaurantBreakBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RestaurantBreak
+        fields = ["id", "start", "end", "day_of_week"]
 
 
 class RestaurantExceptionSerializer(serializers.ModelSerializer):
