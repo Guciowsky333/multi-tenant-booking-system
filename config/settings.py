@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "available_rules",
     "memberships",
     "user_reviews",
+    "menus",
 ]
 
 MIDDLEWARE = [
