@@ -81,15 +81,32 @@ def test_RestaurantViewSet_get_requires_authentication():
     assert response.status_code == 401
 
 
-def test_RestaurantViewSet_get_details(test_user, test_restaurant):
+# retrieve method
+def test_RestaurantViewSet_retrieve(
+    test_user, test_restaurant, test_available_rule, test_restaurant_table, test_restaurant_break
+):
+    """
+    This test check whether in retrieve method endpoint correctly return additionally information about the restaurant.
+    Such as full_address, available_rules or all allowed menus and more
+    """
     client = APIClient()
     client.force_authenticate(test_user)
     response = client.get(f"/api/restaurants/{test_restaurant.id}/")
     assert response.status_code == 200
 
-    assert response.data["name"] == test_restaurant.name
-    assert response.data["address"] == test_restaurant.address
-    assert response.data["city"] == test_restaurant.city
+    data = response.data
+    assert data["full_address"] == test_restaurant.full_address
+    # restaurant available rules
+    assert data["available_rules"][0]["opening_time"] == test_available_rule.opening_time
+    assert data["available_rules"][0]["closing_time"] == test_available_rule.closing_time
+    assert data["available_rules"][0]["day_of_week"] == test_available_rule.day_of_week
+    # restaurant tables
+    assert data["restaurant_tables"][0]["table_number"] == test_restaurant_table.table_number
+    assert data["restaurant_tables"][0]["seats"] == test_restaurant_table.seats
+    # restaurant breaks
+    assert data["restaurant_breaks"][0]["start"] == test_restaurant_break.start
+    assert data["restaurant_breaks"][0]["end"] == test_restaurant_break.end
+    assert data["restaurant_breaks"][0]["day_of_week"] == test_restaurant_break.day_of_week
 
 
 def test_RestaurantViewSet_get_details_invalid_id(test_user):
@@ -121,7 +138,6 @@ def test_RestaurantViewSet_post(test_user, test_cuisine_type):
     }
 
     response = client.post("/api/restaurants/", body)
-    print(response.data)
     assert response.status_code == 201
 
     assert Restaurant.objects.filter(name=body["name"]).exists()

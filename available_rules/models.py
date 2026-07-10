@@ -28,8 +28,28 @@ class AvailableRule(models.Model):
         constraints = [models.UniqueConstraint(fields=["restaurant", "day_of_week"], name="unique_day_of_week")]
 
 
+class RestaurantBreak(models.Model):
+    """
+    In this time booking reservation on the restaurant will not be possible
+    """
+
+    class Days(models.IntegerChoices):
+        MONDAY = 1, "Monday"
+        TUESDAY = 2, "Tuesday"
+        WEDNESDAY = 3, "Wednesday"
+        THURSDAY = 4, "Thursday"
+        FRIDAY = 5, "Friday"
+        SATURDAY = 6, "Saturday"
+        SUNDAY = 7, "Sunday"
+
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="restaurant_breaks")
+    day_of_week = models.IntegerField(choices=Days.choices)
+    start = models.TimeField()
+    end = models.TimeField()
+
+
 class RestaurantTable(models.Model):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="restaurant_tables")
     table_number = models.CharField(max_length=10)
     seats = models.PositiveIntegerField(
         validators=[MinValueValidator(1)],
@@ -43,12 +63,6 @@ class RestaurantTable(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["restaurant", "table_number"], name="unique_table_number_per_restaurant")
         ]
-
-
-class RestaurantBreak(models.Model):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
-    start = models.TimeField()
-    end = models.TimeField()
 
 
 class RestaurantException(models.Model):
