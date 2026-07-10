@@ -42,14 +42,14 @@ class RestaurantBreak(models.Model):
         SATURDAY = 6, "Saturday"
         SUNDAY = 7, "Sunday"
 
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="restaurant_breaks")
     day_of_week = models.IntegerField(choices=Days.choices)
     start = models.TimeField()
     end = models.TimeField()
 
 
 class RestaurantTable(models.Model):
-    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="restaurant_tables")
     table_number = models.CharField(max_length=10)
     seats = models.PositiveIntegerField(
         validators=[MinValueValidator(1)],

@@ -1,6 +1,7 @@
 import pytest
 
 from accounts.models import CustomUser, VerificationCode
+from available_rules.models import AvailableRule, RestaurantBreak, RestaurantTable
 from memberships.models import MemberShip
 from restaurants.models import CuisineType, Restaurant
 from user_reviews.models import Review
@@ -101,3 +102,23 @@ def test_review_2(db, test_restaurant, test_user_1):
         rating=7,
         comment="Test comment",
     )
+
+
+@pytest.fixture
+def test_available_rule(db, test_restaurant, test_cuisine_type):
+    return AvailableRule.objects.create(
+        restaurant=test_restaurant,
+        day_of_week=1,
+        opening_time="08:00:00",
+        closing_time="22:00:00",
+    )
+
+
+@pytest.fixture
+def test_restaurant_table(db, test_restaurant):
+    return RestaurantTable.objects.create(restaurant=test_restaurant, table_number="A10", seats=4)
+
+
+@pytest.fixture
+def test_restaurant_break(db, test_restaurant):
+    return RestaurantBreak.objects.create(restaurant=test_restaurant, start="09:30:00", end="10:00:00", day_of_week=1)

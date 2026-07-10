@@ -35,3 +35,14 @@ class MenuSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.restaurant != value:
             raise serializers.ValidationError("Cannot change restaurant of already existing menu")
         return value
+
+
+class MenuBriefSerializer(serializers.ModelSerializer):
+    """
+    This serializer is used in GET /api/restaurants/{restaurant_id} to display all menus
+    in the restaurant.
+    """
+
+    class Meta:
+        model = Menu
+        fields = ["id", "name"]

@@ -1,6 +1,7 @@
 from urllib.parse import urlencode
 
 from django.core.cache import cache
+from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import viewsets
@@ -11,10 +12,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from available_rules.models import AvailableRule, RestaurantBreak, RestaurantTable
+from menus.models import Menu
 from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permisions import IsRestaurantManagerOrOwner
-from restaurants.serializers import CuisineTypeSerializer, RestaurantSerializer
+from restaurants.serializers import CuisineTypeSerializer, RestaurantDetailSerializer, RestaurantSerializer
 from user_reviews.serializers import ReviewSerializer
 
 
@@ -45,7 +48,6 @@ class AllCuisinesTypeView(APIView):
 class RestaurantViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = RestaurantFilter
-    queryset = Restaurant.objects.all().order_by("id")
     serializer_class = RestaurantSerializer
     parser_classes = [FormParser, MultiPartParser]
     pagination_class = RestaurantPagination
@@ -54,6 +56,21 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         if self.action in ["update", "partial_update", "destroy"]:
             return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
+
+    def get_queryset(self):
+        if self.action == "retrieve":
+            return Restaurant.objects.prefetch_related(
+                Prefetch("menus", queryset=Menu.objects.order_by("id")),
+                Prefetch("available_rules", queryset=AvailableRule.objects.order_by("day_of_week")),
+                Prefetch("restaurant_breaks", queryset=RestaurantBreak.objects.order_by("day_of_week")),
+                Prefetch("restaurant_tables", queryset=RestaurantTable.objects.order_by("seats")),
+            ).order_by("id")
+        return Restaurant.objects.order_by("id")
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return RestaurantDetailSerializer
+        return RestaurantSerializer
 
     def perform_create(self, serializer):
         """
