@@ -31,4 +31,5 @@ urlpatterns = [
     path("api/memberships/", include("memberships.urls")),
     path("api/user_reviews/", include("user_reviews.urls")),
     path("api/menus/", include("menus.urls")),
+    path("api/bookings/", include("booking_system.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

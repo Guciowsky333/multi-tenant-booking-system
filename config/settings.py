@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "memberships",
     "user_reviews",
     "menus",
+    "booking_system",
 ]
 
 MIDDLEWARE = [

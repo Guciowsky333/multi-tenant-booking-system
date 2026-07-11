@@ -21,5 +21,6 @@ class Booking(models.Model):
     status = models.CharField(choices=Role.choices, max_length=10)
     date = models.DateTimeField(auto_now_add=True)
     start_time = models.TimeField()
+    # token that will be snet to user to changed status from "pending" to "confirmed"
     confirmation_token = models.UUIDField(default=uuid.uuid4, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
