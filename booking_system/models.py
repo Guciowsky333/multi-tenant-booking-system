@@ -18,9 +18,19 @@ class Booking(models.Model):
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="bookings")
     table = models.ForeignKey(RestaurantTable, on_delete=models.CASCADE)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    status = models.CharField(choices=Role.choices, max_length=10)
-    date = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(choices=Role.choices, max_length=10, default=Role.PENDING)
+    date = models.DateField()
     start_time = models.TimeField()
+    # Fild "end_time" will be automatically filled in during save method
+    end_time = models.TimeField(null=True, blank=True)
     # token that will be snet to user to changed status from "pending" to "confirmed"
     confirmation_token = models.UUIDField(default=uuid.uuid4, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        from datetime import datetime, timedelta
+
+        start = datetime.combine(self.date, self.start_time)
+        end = start + timedelta(minutes=self.restaurant.reservation_duration_minutes)
+        self.end_time = end.time()
+        super().save(*args, **kwargs)
