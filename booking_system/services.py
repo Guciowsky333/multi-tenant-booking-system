@@ -42,6 +42,16 @@ def searching_first_available_table(
     ):
         raise ValueError("At provided time restaurant is not open")
 
+    # Each restaurant has a `reservation_interval_minutes` field, and the `start_time` must be consistent with this field.
+    booking_start_datetime = datetime.combine(date, start_time)
+    restaurant_opening_datetime = datetime.combine(date, restaurant_opening_time)
+    minutes_since_opening = (booking_start_datetime - restaurant_opening_datetime).total_seconds() // 60
+    if minutes_since_opening % restaurant.reservation_interval_minutes != 0:
+        raise ValueError(
+            f"Invalid start time. Bookings in this restaurant can only start every "
+            f"{restaurant.reservation_interval_minutes} minutes from opening time."
+        )
+
     # Checking if start_time does not overlap breaks at that day
     all_breaks = RestaurantBreak.objects.filter(restaurant=restaurant, day_of_week=day_of_week).all()
     for restaurant_break in all_breaks:
