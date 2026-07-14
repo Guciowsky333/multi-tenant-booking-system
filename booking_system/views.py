@@ -1,9 +1,12 @@
 # Create your views here.
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from booking_system.models import Booking
 from booking_system.serializers import BookingDetailsSerializer, BookingSerializer
+from booking_system.services import searching_first_available_table
 
 
 class BookingViewSet(ModelViewSet):
@@ -17,3 +20,19 @@ class BookingViewSet(ModelViewSet):
         if self.action == "retrieve":
             return BookingDetailsSerializer
         return BookingSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        restaurant = serializer.validated_data["restaurant"]
+        date = serializer.validated_data["date"]
+        start_time = serializer.validated_data["start_time"]
+        guests = serializer.validated_data["guests"]
+
+        try:
+            table = searching_first_available_table(restaurant, date, start_time, guests)
+            serializer.validated_data.pop("guests")
+            serializer.save(table=table, user=self.request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

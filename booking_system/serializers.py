@@ -4,18 +4,31 @@ from booking_system.models import Booking
 
 
 class BookingSerializer(serializers.ModelSerializer):
+    # Instead of table object user can provide amount of people and function "create_booking"
+    # will automatically find first available table
+    guests = serializers.IntegerField(write_only=True)
+
     class Meta:
         model = Booking
         fields = [
             "id",
             "restaurant",
             "table",
+            "guests",
             "user",
             "status",
             "date",
             "start_time",
             "created_at",
         ]
+
+        # User is taken in view and table is automatically assigned in function "create_booking" during post method
+        read_only_fields = ["user", "table"]
+
+    def validate_date(self, date):
+        if date < date.today():
+            raise serializers.ValidationError("Date can not be in the past")
+        return date
 
 
 class BookingDetailsSerializer(serializers.ModelSerializer):
