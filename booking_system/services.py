@@ -1,8 +1,32 @@
 from datetime import datetime, timedelta
 
+from django.db import transaction
+
+from accounts.models import CustomUser
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
 from booking_system.models import Booking
 from restaurants.models import Restaurant
+
+
+def create_booking(
+    restaurant: Restaurant, date: datetime.date, start_time: datetime.time, guests: int, user: CustomUser
+) -> Booking:
+    """
+    Finds available table and create booking object with it.
+
+    In this function we use transaction.atomic() with select_for_update() in tables to prevent case
+    when to user would book the same table at the same time.
+    """
+    with transaction.atomic():
+        table = searching_first_available_table(restaurant, date, start_time, guests)
+        booking = Booking.objects.create(
+            restaurant=restaurant,
+            table=table,
+            user=user,
+            date=date,
+            start_time=start_time,
+        )
+    return booking
 
 
 def searching_first_available_table(
@@ -49,7 +73,9 @@ def searching_first_available_table(
             raise ValueError("At provided time the restaurant has break")
 
     # Checking if any booking does not exist in provided time and date
-    all_matching_tables = RestaurantTable.objects.filter(restaurant=restaurant, seats__gte=guests).all()
+    all_matching_tables = (
+        RestaurantTable.objects.select_for_update().filter(restaurant=restaurant, seats__gte=guests).all()
+    )
     allowed_table = None
     for table in all_matching_tables:
         if Booking.objects.filter(

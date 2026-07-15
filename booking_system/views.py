@@ -6,7 +6,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from booking_system.models import Booking
 from booking_system.serializers import BookingDetailsSerializer, BookingSerializer
-from booking_system.services import searching_first_available_table
+from booking_system.services import create_booking
 
 
 class BookingViewSet(ModelViewSet):
@@ -30,9 +30,8 @@ class BookingViewSet(ModelViewSet):
         guests = serializer.validated_data["guests"]
 
         try:
-            table = searching_first_available_table(restaurant, date, start_time, guests)
+            create_booking(restaurant, date, start_time, guests, user=self.request.user)
             serializer.validated_data.pop("guests")
-            serializer.save(table=table, user=self.request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
