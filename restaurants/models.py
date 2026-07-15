@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Avg
 
@@ -25,7 +26,8 @@ class Restaurant(models.Model):
     address = models.CharField(max_length=100)
     city = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    reservation_duration_minutes = models.IntegerField(default=90)
+    reservation_duration_minutes = models.IntegerField(default=90, validators=[MinValueValidator(1)])
+    reservation_interval_minutes = models.IntegerField(default=30, validators=[MinValueValidator(1)])
 
     @property
     def full_address(self):

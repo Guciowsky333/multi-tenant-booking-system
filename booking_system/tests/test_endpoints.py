@@ -121,6 +121,35 @@ def test_BookingViewSet_post_respects_closed_exception(
     assert response.data["error"] == "In provided date restaurant is closed"
 
 
+def test_BookingViewSet_post_start_time_not_aligned_to_interval(
+    test_user, test_restaurant, test_available_rule, test_restaurant_table
+):
+    """
+    Each restaurant have field "reservation_interval_minutes".In this test user try to create
+    booking model with start_time that is not consistent with that filed.
+
+    reservation_interval_minutes = 30 minutes
+    restaurant opening_time = 08:00:00
+    User set up start_time at 08:27:00 so endpoint should return 400
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_user)
+
+    body = {
+        "restaurant": test_restaurant.id,
+        "guests": 4,
+        "date": next_monday(),
+        "start_time": "08:27:00",
+    }
+
+    response = client.post("/api/bookings/", body)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == (
+        f"Invalid start time. Bookings in this restaurant can only start every "
+        f"{test_restaurant.reservation_interval_minutes} minutes from opening time."
+    )
+
+
 def test_BookingViewSet_post_start_time_overlap_restaurant_break(
     test_user, test_restaurant, test_restaurant_table, test_restaurant_break, test_available_rule
 ):
