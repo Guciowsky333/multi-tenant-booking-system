@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
+from rest_framework.exceptions import NotFound
 
 from accounts.models import CustomUser
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
@@ -103,3 +105,29 @@ def searching_first_available_table(
     if not allowed_table:
         raise ValueError("No free tables available at provided time and date")
     return allowed_table
+
+
+def change_booking_status_to_confirmed(token: str) -> bool:
+    """
+    Returns True if booking exist and its status is PENDING and changes its status to CONFIRMED.
+    """
+    with transaction.atomic():
+        try:
+            booking = Booking.objects.select_for_update().filter(confirmation_token=token).first()
+        except ValidationError:
+            raise ValueError("Invalid token")
+
+        if not booking:
+            raise NotFound("Booking not found")
+        if booking.status == Booking.Status.CONFIRMED:
+            raise ValueError("Booking is already confirmed")
+
+        if booking.status == Booking.Status.CANCELLED:
+            raise ValueError("Booking has been cancelled you can not change its status")
+
+        if booking.status == Booking.Status.COMPLETED:
+            raise ValueError("Booking has been already completed")
+        if booking.status == Booking.Status.PENDING:
+            booking.status = Booking.Status.CONFIRMED
+            booking.save()
+        return True

@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, timedelta
 
 import pytest
@@ -17,6 +18,10 @@ def next_monday():
     return today + timedelta(days=days_until_next_monday)
 
 
+# Test /api/bookings/
+
+
+# Post method
 def test_BookingViewSet_post(test_user, test_restaurant, test_available_rule, test_restaurant_table):
     client = APIClient()
     client.force_authenticate(user=test_user)
@@ -192,3 +197,105 @@ def test_BookingViewSet_post_requires_authentication():
     client = APIClient()
     response = client.post("/api/bookings/", {})
     assert response.status_code == 401
+
+
+# Get method
+
+
+def test_BookingViewSet_get(test_user, test_booking_1, test_booking_2):
+    """
+    Endpoint should return all user's bookings sorted by date.
+    """
+
+    client = APIClient()
+    client.force_authenticate(user=test_user)
+    response = client.get("/api/bookings/?page=1")
+    assert response.status_code == status.HTTP_200_OK
+
+    # test_booking_2 has earlier date so it should be first adn then test_booking_1 with older date
+    assert response.data["results"][0]["id"] == test_booking_2.id
+    assert response.data["results"][1]["id"] == test_booking_1.id
+
+
+def test_BookingViewSet_get_requires_authentication():
+    client = APIClient()
+    response = client.get("/api/bookings/?page=1")
+    assert response.status_code == 401
+
+
+def test_BookingViewSet_get_details(test_user, test_booking_1):
+    client = APIClient()
+    client.force_authenticate(user=test_user)
+    response = client.get(f"/api/bookings/{test_booking_1.id}/")
+    assert response.status_code == status.HTTP_200_OK
+    # checking all data
+    booking = response.data
+    assert booking["id"] == test_booking_1.id
+    assert booking["restaurant_name"] == test_booking_1.restaurant.name
+    assert booking["table_number"] == test_booking_1.table.table_number
+    assert booking["table_seats"] == test_booking_1.table.seats
+    assert booking["user_email"] == test_user.email
+    assert booking["status"] == test_booking_1.status
+    assert booking["date"] == str(test_booking_1.date)
+    assert booking["start_time"] == str(test_booking_1.start_time)
+
+
+def test_BookingViewSet_get_details_returns_404_for_not_owner(test_user_2, test_booking_1):
+    """
+    In this test test_user_2 is not the owner of test_booking_1 so endpoint should return 404.
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_user_2)
+    response = client.get(f"/api/bookings/{test_booking_1.id}/")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_BookingViewSet_get_details_requires_authentication(test_booking_1):
+    client = APIClient()
+    response = client.get(f"/api/bookings/{test_booking_1.id}/")
+    assert response.status_code == 401
+
+
+# action method /api/bookings/status_confirmed/?token=xxx
+def test_BookingViewSet_change_status_confirmed(test_booking_1):
+    client = APIClient()
+    response = client.get(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
+
+    test_booking_1.refresh_from_db()
+    assert response.status_code == status.HTTP_200_OK
+    assert test_booking_1.status == "confirmed"
+
+
+def test_BookingViewSet_change_status_confirmed_invalid_token(test_booking_1):
+    client = APIClient()
+    response = client.get("/api/bookings/status_confirmed/?token=invalid_token")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == "Invalid token"
+
+
+def test_BookingViewSet_change_status_confirmed_not_found_booking(test_booking_1):
+    fake_token = uuid.uuid4()
+    client = APIClient()
+    response = client.get(f"/api/bookings/status_confirmed/?token={fake_token}")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["error"] == "Booking not found"
+
+
+@pytest.mark.parametrize(
+    "booking_status, message",
+    [
+        ("confirmed", "Booking is already confirmed"),
+        ("cancelled", "Booking has been cancelled you can not change its status"),
+        ("completed", "Booking has been already completed"),
+    ],
+)
+def test_BookingViewSet_change_status_confirmed_status_different_than_pending(booking_status, message, test_booking_1):
+    """
+    To change status of booking on confirmed it must have status pending.
+    """
+    client = APIClient()
+    test_booking_1.status = booking_status
+    test_booking_1.save()
+    response = client.get(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == message
