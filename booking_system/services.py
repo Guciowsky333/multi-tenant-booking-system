@@ -131,3 +131,23 @@ def change_booking_status_to_confirmed(token: str) -> bool:
             booking.status = Booking.Status.CONFIRMED
             booking.save()
         return True
+
+
+def change_booking_status_to_completed(booking: Booking) -> bool:
+    """
+    Changes booking status to COMPLETED only if it was confirmed first.
+    """
+    # You cant changes status of the booking to completed if it was not happen yet
+    if datetime.today() < datetime.combine(booking.date, booking.start_time):
+        raise ValueError("The booking hasn't taken place yet.")
+
+    if booking.status == Booking.Status.PENDING:
+        raise ValueError("Booking is still pending the user needs to confirmed it first")
+    if booking.status == Booking.Status.CANCELLED:
+        raise ValueError("This booking has cancelled status you cant change it to completed")
+    if booking.status == Booking.Status.COMPLETED:
+        raise ValueError("Booking is already completed")
+    if booking.status == Booking.Status.CONFIRMED:
+        booking.status = Booking.Status.COMPLETED
+        booking.save()
+    return True

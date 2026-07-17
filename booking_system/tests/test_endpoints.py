@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from rest_framework import status
@@ -299,3 +299,91 @@ def test_BookingViewSet_change_status_confirmed_status_different_than_pending(bo
     response = client.get(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.data["error"] == message
+
+
+# action method /api/bookings/{booking.id}/status_completed/
+@pytest.mark.parametrize(
+    "user, expected_status",
+    [
+        ("owner", status.HTTP_200_OK),
+        ("manager", status.HTTP_200_OK),
+        ("staff", status.HTTP_200_OK),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+    ],
+)
+def test_BookingViewSet_change_status_completed_permission(
+    user, expected_status, test_booking_1, test_user_2, test_owner, test_membership_manager, test_membership_staff
+):
+    """
+    Only members of the restaurant to which this booking belongs are albe to change status to "completed".
+    """
+
+    client = APIClient()
+
+    # It is only possible to change status to "completed" when date of booking is passed
+    # And status of the booking need be confirmed
+    test_booking_1.date = datetime.today() - timedelta(days=1)
+    test_booking_1.status = Booking.Status.CONFIRMED
+    test_booking_1.save()
+
+    if user == "owner":
+        client.force_authenticate(user=test_owner)
+    if user == "manager":
+        client.force_authenticate(user=test_membership_manager.user)
+    if user == "staff":
+        client.force_authenticate(user=test_membership_staff.user)
+    if user == "normal_user":
+        client.force_authenticate(user=test_user_2)
+
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    test_booking_1.refresh_from_db()
+    assert response.status_code == expected_status
+
+    if expected_status == status.HTTP_200_OK:
+        assert test_booking_1.status == Booking.Status.COMPLETED
+
+
+@pytest.mark.parametrize(
+    "booking_status, message",
+    [
+        ("pending", "Booking is still pending the user needs to confirmed it first"),
+        ("cancelled", "This booking has cancelled status you cant change it to completed"),
+        ("completed", "Booking is already completed"),
+    ],
+)
+def test_BookingViewSet_change_status_completed_different_than_confirmed(
+    booking_status, message, test_booking_1, test_owner
+):
+    """
+    Members of the restaurant can only change booking when its status is confirmed.
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+
+    # It is only possible to change status to "completed" when date of booking is passed
+    test_booking_1.date = datetime.today() - timedelta(days=1)
+    test_booking_1.status = booking_status
+    test_booking_1.save()
+
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == message
+
+
+def test_BookingViewSet_change_status_completed_booking_date_in_the_future(test_booking_1, test_owner):
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+
+    # Set up date of booking in the future
+    test_booking_1.date = datetime.today() + timedelta(days=1)
+    test_booking_1.save()
+
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == "The booking hasn't taken place yet."
+
+
+def test_BookingViewSet_change_status_completed_requires_authentication(test_booking_1):
+    client = APIClient()
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED

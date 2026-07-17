@@ -9,8 +9,13 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from booking_system.models import Booking
+from booking_system.permisions import IsMemberOfRestaurant
 from booking_system.serializers import BookingDetailsSerializer, BookingSerializer
-from booking_system.services import change_booking_status_to_confirmed, create_booking
+from booking_system.services import (
+    change_booking_status_to_completed,
+    change_booking_status_to_confirmed,
+    create_booking,
+)
 from booking_system.tasks import cancelled_booking_after_30_minutes, send_booking_confirmation_email
 
 
@@ -24,6 +29,8 @@ class BookingViewSet(ModelViewSet):
     pagination_class = BookingPagination
 
     def get_queryset(self):
+        if self.action == "change_status_completed":
+            return Booking.objects.all()
         return Booking.objects.filter(user=self.request.user).order_by("date", "start_time")
 
     def get_serializer_class(self):
@@ -94,3 +101,31 @@ class BookingViewSet(ModelViewSet):
 
         except NotFound as e:
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+
+    @extend_schema(
+        summary="Change status from confirmed to completed.",
+        description="""
+        Changes the status of the booking from confirmed to completed.
+        
+        When user finished his booking members of the restaurant can change its status to completed.
+        So that the reservation doesn't keep the table occupied.
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - Request user has to be member of the restaurant to which booking belongs.
+        - Provided booking must exist.
+        - Provided booking must has status "confirmed".
+        """,
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="status_completed",
+        permission_classes=[IsAuthenticated, IsMemberOfRestaurant],
+    )
+    def change_status_completed(self, request, pk=None):
+        try:
+            change_booking_status_to_completed(self.get_object())
+            return Response({"status": "Status has been changed correctly"}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
