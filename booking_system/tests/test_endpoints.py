@@ -282,14 +282,16 @@ def test_BookingViewSet_change_status_confirmed_not_found_booking(test_booking_1
 
 
 @pytest.mark.parametrize(
-    "booking_status, message",
+    "booking_status, excepted_status",
     [
-        ("confirmed", "Booking is already confirmed"),
-        ("cancelled", "Booking has been cancelled you can not change its status"),
-        ("completed", "Booking has been already completed"),
+        ("confirmed", status.HTTP_400_BAD_REQUEST),
+        ("cancelled", status.HTTP_400_BAD_REQUEST),
+        ("completed", status.HTTP_400_BAD_REQUEST),
     ],
 )
-def test_BookingViewSet_change_status_confirmed_status_different_than_pending(booking_status, message, test_booking_1):
+def test_BookingViewSet_change_status_confirmed_status_different_than_pending(
+    booking_status, excepted_status, test_booking_1
+):
     """
     To change status of booking on confirmed it must have status pending.
     """
@@ -297,8 +299,8 @@ def test_BookingViewSet_change_status_confirmed_status_different_than_pending(bo
     test_booking_1.status = booking_status
     test_booking_1.save()
     response = client.get(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert response.data["error"] == message
+    assert response.status_code == excepted_status
+    assert response.data["error"] == "Booking status must be PENDING"
 
 
 # action method /api/bookings/{booking.id}/status_completed/
@@ -344,15 +346,15 @@ def test_BookingViewSet_change_status_completed_permission(
 
 
 @pytest.mark.parametrize(
-    "booking_status, message",
+    "booking_status, excepted_status",
     [
-        ("pending", "Booking is still pending the user needs to confirmed it first"),
-        ("cancelled", "This booking has cancelled status you cant change it to completed"),
-        ("completed", "Booking is already completed"),
+        ("pending", status.HTTP_400_BAD_REQUEST),
+        ("cancelled", status.HTTP_400_BAD_REQUEST),
+        ("completed", status.HTTP_400_BAD_REQUEST),
     ],
 )
 def test_BookingViewSet_change_status_completed_different_than_confirmed(
-    booking_status, message, test_booking_1, test_owner
+    booking_status, excepted_status, test_booking_1, test_owner
 ):
     """
     Members of the restaurant can only change booking when its status is confirmed.
@@ -366,8 +368,8 @@ def test_BookingViewSet_change_status_completed_different_than_confirmed(
     test_booking_1.save()
 
     response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert response.data["error"] == message
+    assert response.status_code == excepted_status
+    assert response.data["error"] == "Booking status must be CONFIRMED"
 
 
 def test_BookingViewSet_change_status_completed_booking_date_in_the_future(test_booking_1, test_owner):
@@ -387,3 +389,101 @@ def test_BookingViewSet_change_status_completed_requires_authentication(test_boo
     client = APIClient()
     response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# action method /api/bookings/{booking.id}/status_cancelled/
+
+
+def test_BookingViewSet_change_status_cancelled_owner_of_booking(test_booking_1, test_user_2):
+    """
+    In this test test_user_2 is owner of the test_booking_1 so he can change status to "cancelled" at least
+    2 days before test_booking_1.date
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_user_2)
+    test_booking_1.date = (datetime.today() + timedelta(days=3)).date()
+    test_booking_1.status = Booking.Status.CONFIRMED
+    test_booking_1.save()
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    test_booking_1.refresh_from_db()
+    assert response.status_code == status.HTTP_200_OK
+    assert test_booking_1.status == Booking.Status.CANCELLED
+
+
+def test_BookingViewSet_change_status_cancelled_owner_of_booking_too_late(test_booking_1, test_user_2):
+    """
+    In this test owner of the test_booking_1 try to change its status to "cancelled" but 1 day before test_booking_1.date
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_user_2)
+    test_booking_1.date = (datetime.today() + timedelta(days=1)).date()
+    test_booking_1.status = Booking.Status.CONFIRMED
+    test_booking_1.save()
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    test_booking_1.refresh_from_db()
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert test_booking_1.status == Booking.Status.CONFIRMED
+    assert (
+        response.data["error"]
+        == "Too late you can change the status of your booking to 'cancelled' at least 2 days before the booking date"
+    )
+
+
+@pytest.mark.parametrize(
+    "user, expected_status",
+    [
+        ("staff", status.HTTP_200_OK),
+        ("manager", status.HTTP_200_OK),
+        ("owner", status.HTTP_200_OK),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+    ],
+)
+def test_BookingViewSet_change_status_cancelled_member_or_owner_of_restaurant(
+    user, expected_status, test_booking_1, test_owner, test_membership_staff, test_membership_manager, test_user_3
+):
+    """
+    Members or owner of the restaurant on which this booking belongs can change its status to "cancelled"
+    at any time.
+    """
+    client = APIClient()
+    if user == "owner":
+        client.force_authenticate(user=test_owner)
+    if user == "staff":
+        client.force_authenticate(user=test_membership_staff.user)
+    if user == "manager":
+        client.force_authenticate(user=test_membership_manager.user)
+    if user == "normal_user":
+        client.force_authenticate(user=test_user_3)
+
+    test_booking_1.status = Booking.Status.CONFIRMED
+    test_booking_1.date = (datetime.today() - timedelta(days=1)).date()
+    test_booking_1.save()
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    test_booking_1.refresh_from_db()
+    assert response.status_code == expected_status
+    if expected_status == status.HTTP_200_OK:
+        assert test_booking_1.status == Booking.Status.CANCELLED
+
+
+@pytest.mark.parametrize(
+    "booking_status, expected_status",
+    [
+        ("pending", status.HTTP_400_BAD_REQUEST),
+        ("cancelled", status.HTTP_400_BAD_REQUEST),
+        ("completed", status.HTTP_400_BAD_REQUEST),
+    ],
+)
+def test_BookingViewSet_change_status_cancelled_differente_than_confirmed(
+    booking_status, expected_status, test_owner, test_booking_1
+):
+    """
+    If someone want to change status of the booking to "cancelled" it must be "confirmed" at first.
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+    test_booking_1.status = booking_status
+    test_booking_1.save()
+    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    test_booking_1.refresh_from_db()
+    assert response.status_code == expected_status
+    assert response.data["error"] == "Booking status must be CONFIRMED"

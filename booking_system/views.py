@@ -9,9 +9,10 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
 from booking_system.models import Booking
-from booking_system.permisions import IsMemberOfRestaurant
+from booking_system.permisions import IsMemberOfRestaurant, IsMemberOfRestaurantOrOwnerOfBooking
 from booking_system.serializers import BookingDetailsSerializer, BookingSerializer
 from booking_system.services import (
+    change_booking_status_to_cancelled,
     change_booking_status_to_completed,
     change_booking_status_to_confirmed,
     create_booking,
@@ -29,7 +30,7 @@ class BookingViewSet(ModelViewSet):
     pagination_class = BookingPagination
 
     def get_queryset(self):
-        if self.action == "change_status_completed":
+        if self.action in ["change_status_completed", "change_status_cancelled"]:
             return Booking.objects.all()
         return Booking.objects.filter(user=self.request.user).order_by("date", "start_time")
 
@@ -126,6 +127,33 @@ class BookingViewSet(ModelViewSet):
     def change_status_completed(self, request, pk=None):
         try:
             change_booking_status_to_completed(self.get_object())
+            return Response({"status": "Status has been changed correctly"}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Change status to cancelled.",
+        description="""
+        Change the status of the booking from confirmed to cancelled.
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - If request user is the owner of booking they may change its status to cancelled
+        only 2 days before the date of the booking.
+        - If request user in the member of the restaurant on which the booking belongs they may 
+        change its status to cancelled at any time.
+        - Status of the provided booking must be confirmed.
+        """,
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="status_cancelled",
+        permission_classes=[IsAuthenticated, IsMemberOfRestaurantOrOwnerOfBooking],
+    )
+    def change_status_cancelled(self, request, pk=None):
+        try:
+            change_booking_status_to_cancelled(self.get_object(), self.request.user)
             return Response({"status": "Status has been changed correctly"}, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

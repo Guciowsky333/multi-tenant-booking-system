@@ -119,17 +119,12 @@ def change_booking_status_to_confirmed(token: str) -> bool:
 
         if not booking:
             raise NotFound("Booking not found")
-        if booking.status == Booking.Status.CONFIRMED:
-            raise ValueError("Booking is already confirmed")
 
-        if booking.status == Booking.Status.CANCELLED:
-            raise ValueError("Booking has been cancelled you can not change its status")
+        if booking.status != booking.Status.PENDING:
+            raise ValueError("Booking status must be PENDING")
 
-        if booking.status == Booking.Status.COMPLETED:
-            raise ValueError("Booking has been already completed")
-        if booking.status == Booking.Status.PENDING:
-            booking.status = Booking.Status.CONFIRMED
-            booking.save()
+        booking.status = Booking.Status.CONFIRMED
+        booking.save()
         return True
 
 
@@ -141,13 +136,33 @@ def change_booking_status_to_completed(booking: Booking) -> bool:
     if datetime.today() < datetime.combine(booking.date, booking.start_time):
         raise ValueError("The booking hasn't taken place yet.")
 
-    if booking.status == Booking.Status.PENDING:
-        raise ValueError("Booking is still pending the user needs to confirmed it first")
-    if booking.status == Booking.Status.CANCELLED:
-        raise ValueError("This booking has cancelled status you cant change it to completed")
-    if booking.status == Booking.Status.COMPLETED:
-        raise ValueError("Booking is already completed")
-    if booking.status == Booking.Status.CONFIRMED:
-        booking.status = Booking.Status.COMPLETED
-        booking.save()
+    if booking.status != booking.Status.CONFIRMED:
+        raise ValueError("Booking status must be CONFIRMED")
+
+    booking.status = Booking.Status.COMPLETED
+    booking.save()
+    return True
+
+
+def change_booking_status_to_cancelled(booking: Booking, user: CustomUser) -> bool:
+    """
+    Change booking status to CANCELLED only if it was confirmed first.
+    User who is the owner of the restaurant can change it only 2 days before the booking date.
+    User who is the member of the restaurant on which the booking belongs can change it at any time.
+    """
+
+    if booking.status != booking.Status.CONFIRMED:
+        raise ValueError("Booking status must be CONFIRMED")
+
+    if booking.user == user:
+        today = datetime.today()
+        booking_date = datetime.combine(booking.date, booking.start_time)
+        if today > (booking_date - timedelta(days=2)):
+            raise ValueError(
+                "Too late you can change the status of your booking to 'cancelled' at least 2 days before the booking date"
+            )
+
+    # If user is not owner of booking he has to be member of the restaurant check "IsMemberOfRestaurantOrOwnerOfBooking" permission
+    booking.status = Booking.Status.CANCELLED
+    booking.save()
     return True
