@@ -287,6 +287,7 @@ def test_BookingViewSet_change_status_confirmed_not_found_booking(test_booking_1
         ("confirmed", status.HTTP_400_BAD_REQUEST),
         ("cancelled", status.HTTP_400_BAD_REQUEST),
         ("completed", status.HTTP_400_BAD_REQUEST),
+        ("no_show", status.HTTP_400_BAD_REQUEST),
     ],
 )
 def test_BookingViewSet_change_status_confirmed_status_different_than_pending(
@@ -351,6 +352,7 @@ def test_BookingViewSet_change_status_completed_permission(
         ("pending", status.HTTP_400_BAD_REQUEST),
         ("cancelled", status.HTTP_400_BAD_REQUEST),
         ("completed", status.HTTP_400_BAD_REQUEST),
+        ("no_show", status.HTTP_400_BAD_REQUEST),
     ],
 )
 def test_BookingViewSet_change_status_completed_different_than_confirmed(
@@ -471,6 +473,7 @@ def test_BookingViewSet_change_status_cancelled_member_or_owner_of_restaurant(
         ("pending", status.HTTP_400_BAD_REQUEST),
         ("cancelled", status.HTTP_400_BAD_REQUEST),
         ("completed", status.HTTP_400_BAD_REQUEST),
+        ("no_show", status.HTTP_400_BAD_REQUEST),
     ],
 )
 def test_BookingViewSet_change_status_cancelled_differente_than_confirmed(

@@ -14,6 +14,7 @@ class Booking(models.Model):
         CONFIRMED = "confirmed", "Confirmed"
         CANCELLED = "cancelled", "Cancelled"
         COMPLETED = "completed", "Completed"
+        NO_SHOW = "no_show", "No_show"
 
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name="bookings")
     table = models.ForeignKey(RestaurantTable, on_delete=models.CASCADE)
