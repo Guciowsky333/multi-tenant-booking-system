@@ -202,13 +202,13 @@ def test_BookingViewSet_post_requires_authentication():
 # Get method
 
 
-def test_BookingViewSet_get(test_user, test_booking_1, test_booking_2):
+def test_BookingViewSet_get(test_user_2, test_booking_1, test_booking_2):
     """
     Endpoint should return all user's bookings sorted by date.
     """
 
     client = APIClient()
-    client.force_authenticate(user=test_user)
+    client.force_authenticate(user=test_user_2)
     response = client.get("/api/bookings/?page=1")
     assert response.status_code == status.HTTP_200_OK
 
@@ -223,9 +223,9 @@ def test_BookingViewSet_get_requires_authentication():
     assert response.status_code == 401
 
 
-def test_BookingViewSet_get_details(test_user, test_booking_1):
+def test_BookingViewSet_get_details(test_user_2, test_booking_1):
     client = APIClient()
-    client.force_authenticate(user=test_user)
+    client.force_authenticate(user=test_user_2)
     response = client.get(f"/api/bookings/{test_booking_1.id}/")
     assert response.status_code == status.HTTP_200_OK
     # checking all data
@@ -234,18 +234,18 @@ def test_BookingViewSet_get_details(test_user, test_booking_1):
     assert booking["restaurant_name"] == test_booking_1.restaurant.name
     assert booking["table_number"] == test_booking_1.table.table_number
     assert booking["table_seats"] == test_booking_1.table.seats
-    assert booking["user_email"] == test_user.email
+    assert booking["user_email"] == test_user_2.email
     assert booking["status"] == test_booking_1.status
     assert booking["date"] == str(test_booking_1.date)
     assert booking["start_time"] == str(test_booking_1.start_time)
 
 
-def test_BookingViewSet_get_details_returns_404_for_not_owner(test_user_2, test_booking_1):
+def test_BookingViewSet_get_details_returns_404_for_not_owner(test_user_1, test_booking_1):
     """
-    In this test test_user_2 is not the owner of test_booking_1 so endpoint should return 404.
+    In this test test_user_1 is not the owner of test_booking_1 so endpoint should return 404.
     """
     client = APIClient()
-    client.force_authenticate(user=test_user_2)
+    client.force_authenticate(user=test_user_1)
     response = client.get(f"/api/bookings/{test_booking_1.id}/")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
@@ -312,7 +312,7 @@ def test_BookingViewSet_change_status_confirmed_status_different_than_pending(bo
     ],
 )
 def test_BookingViewSet_change_status_completed_permission(
-    user, expected_status, test_booking_1, test_user_2, test_owner, test_membership_manager, test_membership_staff
+    user, expected_status, test_booking_1, test_user_3, test_owner, test_membership_manager, test_membership_staff
 ):
     """
     Only members of the restaurant to which this booking belongs are albe to change status to "completed".
@@ -333,7 +333,7 @@ def test_BookingViewSet_change_status_completed_permission(
     if user == "staff":
         client.force_authenticate(user=test_membership_staff.user)
     if user == "normal_user":
-        client.force_authenticate(user=test_user_2)
+        client.force_authenticate(user=test_user_3)
 
     response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
     test_booking_1.refresh_from_db()

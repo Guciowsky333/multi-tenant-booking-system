@@ -33,6 +33,10 @@ def test_user_2(db):
     return CustomUser.objects.create_user(email="test@test3.com", password="Test_password")
 
 
+def test_user_3(db):
+    return CustomUser.objects.create_user(email="test@test4.com", password="Test_password")
+
+
 @pytest.fixture
 def test_verification_code(db):
     return VerificationCode.objects.create(email="test@test1.com", code="123456")
