@@ -312,7 +312,7 @@ def test_BookingViewSet_change_status_confirmed_status_different_than_pending(bo
     ],
 )
 def test_BookingViewSet_change_status_completed_permission(
-    user, expected_status, test_booking_1, test_user_3, test_owner, test_membership_manager, test_membership_staff
+    user, expected_status, test_booking_1, test_user_2, test_owner, test_membership_manager, test_membership_staff
 ):
     """
     Only members of the restaurant to which this booking belongs are albe to change status to "completed".
@@ -333,7 +333,7 @@ def test_BookingViewSet_change_status_completed_permission(
     if user == "staff":
         client.force_authenticate(user=test_membership_staff.user)
     if user == "normal_user":
-        client.force_authenticate(user=test_user_3)
+        client.force_authenticate(user=test_user_2)
 
     response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
     test_booking_1.refresh_from_db()
