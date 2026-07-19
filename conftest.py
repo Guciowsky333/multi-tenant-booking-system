@@ -4,7 +4,7 @@ from accounts.models import CustomUser, VerificationCode
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
 from booking_system.tests.test_endpoints import next_monday
 from memberships.models import MemberShip
-from restaurants.models import CuisineType, Restaurant
+from restaurants.models import CuisineType, Restaurant, RestaurantBan
 from user_reviews.models import Review
 
 
@@ -57,6 +57,7 @@ def test_restaurant(db, test_owner, test_cuisine_type):
         city="test_city",
         owner=test_owner,
         cuisine_type=test_cuisine_type,
+        no_show_ban_threshold=3,
     )
 
 
@@ -149,4 +150,18 @@ def test_exception_closed(db, test_restaurant):
         type="closed",
         opening_time="10:00:00",
         closing_time="20:00:00",
+    )
+
+
+@pytest.fixture
+def test_ban_user(db):
+    return CustomUser.objects.create_user(email="test@banuser.com", password="<PASSWORD>")
+
+
+@pytest.fixture
+def test_restaurant_ban(db, test_restaurant, test_ban_user):
+    return RestaurantBan.objects.create(
+        restaurant=test_restaurant,
+        user=test_ban_user,
+        description="Test description",
     )

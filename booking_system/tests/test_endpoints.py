@@ -1,11 +1,12 @@
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from booking_system.models import Booking
+from restaurants.models import RestaurantBan
 
 
 def next_monday():
@@ -51,6 +52,24 @@ def test_BookingViewSet_delete_return_405(test_owner, test_booking_1):
 
 
 # Post method
+def test_BookingViewSet_banned_user(
+    test_ban_user, test_restaurant_ban, test_restaurant, test_restaurant_table, test_available_rule
+):
+    client = APIClient()
+    client.force_authenticate(user=test_ban_user)
+    body = {
+        "restaurant": test_restaurant.id,
+        "guests": 4,  # <-- test_restaurant_table has exactly 4 seats
+        "date": next_monday(),
+        "start_time": "17:00:00",
+    }
+    response = client.post("/api/bookings/", body)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == (
+        f"You have been banned in this restaurant.reason: {test_restaurant_ban.description}"
+    )
+
+
 def test_BookingViewSet_post(test_user, test_restaurant, test_available_rule, test_restaurant_table):
     client = APIClient()
     client.force_authenticate(user=test_user)
@@ -519,3 +538,117 @@ def test_BookingViewSet_change_status_cancelled_differente_than_confirmed(
     test_booking_1.refresh_from_db()
     assert response.status_code == expected_status
     assert response.data["error"] == "Booking status must be CONFIRMED"
+
+
+# action method /api/bookings/{booking.id}/status_no_show/
+@pytest.mark.parametrize(
+    "user , expected_status",
+    [
+        ("staff", status.HTTP_200_OK),
+        ("manager", status.HTTP_200_OK),
+        ("owner", status.HTTP_200_OK),
+        ("booking_owner", status.HTTP_403_FORBIDDEN),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+    ],
+)
+def test_BookingViewSet_change_status_no_show_owner_or_member_restaurant(
+    user, expected_status, test_membership_staff, test_membership_manager, test_owner, test_user_3, test_booking_1
+):
+    """
+    Only owner or members of the restaurant on which this booking belongs can change its status to "no_show"
+    """
+    client = APIClient()
+    if user == "staff":
+        client.force_authenticate(user=test_membership_staff.user)
+    if user == "manager":
+        client.force_authenticate(user=test_membership_manager.user)
+    if user == "owner":
+        client.force_authenticate(user=test_owner)
+    if user == "booking_owner":
+        client.force_authenticate(user=test_booking_1.user)
+    if user == "normal_user":
+        client.force_authenticate(user=test_user_3)
+    # Booking must be in past
+    test_booking_1.date = (datetime.today() - timedelta(days=1)).date()
+    test_booking_1.status = Booking.Status.CONFIRMED
+    test_booking_1.save()
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_no_show/")
+    test_booking_1.refresh_from_db()
+    assert response.status_code == expected_status
+    if expected_status == status.HTTP_200_OK:
+        assert test_booking_1.status == Booking.Status.NO_SHOW
+
+
+@pytest.mark.parametrize(
+    "booking_status, expected_status",
+    [
+        ("pending", status.HTTP_400_BAD_REQUEST),
+        ("cancelled", status.HTTP_400_BAD_REQUEST),
+        ("completed", status.HTTP_400_BAD_REQUEST),
+        ("no_show", status.HTTP_400_BAD_REQUEST),
+    ],
+)
+def test_BookingViewSet_change_status_no_show_different_stauts_than_confirmed(
+    booking_status, expected_status, test_owner, test_booking_1
+):
+    """
+    Only booking with status CONFIRMED can be changes to "no_show":
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+    test_booking_1.date = (datetime.today() - timedelta(days=1)).date()
+    test_booking_1.status = booking_status
+    test_booking_1.save()
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_no_show/")
+    assert response.status_code == expected_status
+    assert response.data["error"] == "Booking status must be CONFIRMED"
+
+
+def test_BookingViewSet_change_status_no_show_date_in_future(test_booking_1, test_owner):
+    """
+    Booking must be in past to change its status to "no_show"
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+    # Set date in future
+    test_booking_1.date = (datetime.today() + timedelta(days=1)).date()
+    test_booking_1.status = Booking.Status.CONFIRMED
+    test_booking_1.save()
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_no_show/")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == "The booking hasn't taken place yet."
+
+
+def test_BookingViewSet_change_status_no_show_ban_user(test_booking_1, test_owner, test_restaurant_table):
+    """
+    In this test we create 2 bookings with status "no_show" for test_booking_1.user
+    and filed "no_show_ban_threshold" in test_booking_1.restaurant = 3 so this time endpoint should
+    ban this user for exceed "no_show_ban_threshold" filed.
+    """
+    user = test_booking_1.user
+    restaurant = test_booking_1.restaurant
+    test_booking_1.date = (datetime.today() - timedelta(days=1)).date()
+    test_booking_1.status = Booking.Status.CONFIRMED
+    test_booking_1.save()
+    Booking.objects.create(
+        user=user,
+        restaurant=restaurant,
+        table=test_restaurant_table,
+        status=Booking.Status.NO_SHOW,
+        date=(datetime.today() - timedelta(days=5)).date(),
+        start_time=time(15, 0, 0),
+    )
+    Booking.objects.create(
+        user=user,
+        restaurant=restaurant,
+        table=test_restaurant_table,
+        status=Booking.Status.NO_SHOW,
+        date=(datetime.today() - timedelta(days=3)).date(),
+        start_time=time(15, 0, 0),
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_no_show/")
+    assert response.status_code == status.HTTP_200_OK
+    assert RestaurantBan.objects.filter(user=user, restaurant=restaurant).exists()

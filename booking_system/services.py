@@ -7,7 +7,7 @@ from rest_framework.exceptions import NotFound
 from accounts.models import CustomUser
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
 from booking_system.models import Booking
-from restaurants.models import Restaurant
+from restaurants.models import Restaurant, RestaurantBan
 
 
 def create_booking(
@@ -20,6 +20,10 @@ def create_booking(
     when to user would book the same table at the same time.
     """
     with transaction.atomic():
+        # Chacking if user has been banned in this restaurant
+        restaurant_ban = RestaurantBan.objects.filter(restaurant=restaurant, user=user).first()
+        if restaurant_ban:
+            raise ValueError(f"You have been banned in this restaurant.reason: {restaurant_ban.description}")
         table = searching_first_available_table(restaurant, date, start_time, guests)
         booking = Booking.objects.create(
             restaurant=restaurant,
@@ -165,4 +169,33 @@ def change_booking_status_to_cancelled(booking: Booking, user: CustomUser) -> bo
     # If user is not owner of booking he has to be member of the restaurant check "IsMemberOfRestaurantOrOwnerOfBooking" permission
     booking.status = Booking.Status.CANCELLED
     booking.save()
+    return True
+
+
+def change_booking_status_to_no_show(booking: Booking) -> bool:
+    """
+    This function changes booking status to NO_SHOW only if it was CONFIRMED first, and check
+    field "no_show_ban_threshold" in restaurant associated with the booking if user exceeded it Bans this user in this restaurant.
+    If field "no_show_ban_threshold" is empty because it is not required field just changes status.
+    """
+    if booking.status != booking.Status.CONFIRMED:
+        raise ValueError("Booking status must be CONFIRMED")
+    if datetime.today() < datetime.combine(booking.date, booking.start_time):
+        raise ValueError("The booking hasn't taken place yet.")
+
+    no_show_ban_threshold = booking.restaurant.no_show_ban_threshold
+    booking.status = Booking.Status.NO_SHOW
+    booking.save()
+    # If restaurant do not have fild "no_show_ban_threshold" we just change status to "no_show" without checking if user does not exceed it
+    if not no_show_ban_threshold:
+        return True
+
+    user = booking.user
+    restaurant = booking.restaurant
+    user_bookings_status_no_show = Booking.objects.filter(restaurant=restaurant, user=user, status="no_show").count()
+    if user_bookings_status_no_show >= no_show_ban_threshold:
+        # Ban user in the restaurant
+        RestaurantBan.objects.create(
+            restaurant=restaurant, user=user, description="The user failed to show up for their booking too many times."
+        )
     return True

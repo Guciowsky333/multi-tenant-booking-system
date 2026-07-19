@@ -16,6 +16,7 @@ from booking_system.services import (
     change_booking_status_to_cancelled,
     change_booking_status_to_completed,
     change_booking_status_to_confirmed,
+    change_booking_status_to_no_show,
     create_booking,
 )
 from booking_system.tasks import cancelled_booking_after_30_minutes, send_booking_confirmation_email
@@ -30,7 +31,7 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
     pagination_class = BookingPagination
 
     def get_queryset(self):
-        if self.action in ["change_status_completed", "change_status_cancelled"]:
+        if self.action in ["change_status_completed", "change_status_cancelled", "change_status_no_show"]:
             return Booking.objects.all()
         return Booking.objects.filter(user=self.request.user).order_by("date", "start_time")
 
@@ -77,7 +78,7 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
         return self.get_paginated_response(serializer.data)
 
     @extend_schema(
-        summary="Change status from pending to confirmed.",
+        summary="Changes status from pending to confirmed.",
         description="""
                Changes the status of the booking from pending to confirmed by confirmation_token.
 
@@ -104,7 +105,7 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
     @extend_schema(
-        summary="Change status from confirmed to completed.",
+        summary="Changes status from confirmed to completed.",
         description="""
         Changes the status of the booking from confirmed to completed.
         
@@ -132,9 +133,9 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @extend_schema(
-        summary="Change status to cancelled.",
+        summary="Changes status to cancelled.",
         description="""
-        Change the status of the booking from confirmed to cancelled.
+        Changes the status of the booking from confirmed to cancelled.
         
         Business rules:
         - Request user has to be authenticated.
@@ -155,5 +156,33 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
         try:
             change_booking_status_to_cancelled(self.get_object(), self.request.user)
             return Response({"status": "Status has been changed correctly"}, status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Changes status to no_show.",
+        description="""
+        Changes the status of the booking from confirmed to no_show.
+        If the restaurant has filed "no_show_ban_threshold" and user exceeded it
+        bans the user in this restaurant if not just changes status to "no_show".
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - Request user has to be member or owner of the restaurant to which booking belongs.
+        - Booking date must be in the past. 
+        - Status of the provided booking must be confirmed.
+        """,
+    )
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path="status_no_show",
+        permission_classes=[IsAuthenticated, IsMemberOfRestaurant],
+    )
+    def change_status_no_show(self, request, pk=None):
+        try:
+            change_booking_status_to_no_show(self.get_object())
+            return Response({"status": "Status has been changed correctly"}, status=status.HTTP_200_OK)
+
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

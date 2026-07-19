@@ -8,7 +8,7 @@ class IsMemberOfRestaurant(permissions.BasePermission):
         """
         Returns 200 only for members of the restaurant on which the booking belongs or for owner this restaurant.
 
-        Using in "change_status_completed" action
+        Using in "change_status_completed" and "change_status_no_show" actions
         """
         return (
             obj.restaurant.owner == request.user
