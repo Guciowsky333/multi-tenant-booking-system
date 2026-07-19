@@ -3,10 +3,11 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
+from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import GenericViewSet
 
 from booking_system.models import Booking
 from booking_system.permisions import IsMemberOfRestaurant, IsMemberOfRestaurantOrOwnerOfBooking
@@ -24,8 +25,7 @@ class BookingPagination(PageNumberPagination):
     page_size = 10
 
 
-class BookingViewSet(ModelViewSet):
-    http_method_names = ["get", "post"]
+class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, GenericViewSet):
     permission_classes = [IsAuthenticated]
     pagination_class = BookingPagination
 
@@ -91,7 +91,7 @@ class BookingViewSet(ModelViewSet):
             OpenApiParameter(name="token", required=True, description="confirmation_token of the booking"),
         ],
     )
-    @action(detail=False, methods=["get"], url_path="status_confirmed", permission_classes=[AllowAny])
+    @action(detail=False, methods=["patch"], url_path="status_confirmed", permission_classes=[AllowAny])
     def change_status_confirmed(self, request):
         token = request.query_params.get("token")
         try:
@@ -120,7 +120,7 @@ class BookingViewSet(ModelViewSet):
     )
     @action(
         detail=True,
-        methods=["get"],
+        methods=["patch"],
         url_path="status_completed",
         permission_classes=[IsAuthenticated, IsMemberOfRestaurant],
     )
@@ -147,7 +147,7 @@ class BookingViewSet(ModelViewSet):
     )
     @action(
         detail=True,
-        methods=["get"],
+        methods=["patch"],
         url_path="status_cancelled",
         permission_classes=[IsAuthenticated, IsMemberOfRestaurantOrOwnerOfBooking],
     )

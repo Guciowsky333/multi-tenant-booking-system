@@ -19,6 +19,35 @@ def next_monday():
 
 
 # Test /api/bookings/
+# Patch, Put, Delete methods
+def test_BookingViewSet_patch_return_405(test_owner, test_booking_1):
+    """
+    Normal patch method (Not including @actions) is unavailable, endpoint should return 405.
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/")
+    assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+def test_BookingViewSet_put_return_405(test_owner, test_booking_1):
+    """
+    Put method is unavailable, so endpoint should return 405.
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+    response = client.put(f"/api/bookings/{test_booking_1.id}/")
+    assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+def test_BookingViewSet_delete_return_405(test_owner, test_booking_1):
+    """
+    Delete method is unavailable, so endpoint should return 405.
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_owner)
+    response = client.delete(f"/api/bookings/{test_booking_1.id}/")
+    assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
 
 # Post method
@@ -259,7 +288,7 @@ def test_BookingViewSet_get_details_requires_authentication(test_booking_1):
 # action method /api/bookings/status_confirmed/?token=xxx
 def test_BookingViewSet_change_status_confirmed(test_booking_1):
     client = APIClient()
-    response = client.get(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
+    response = client.patch(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
 
     test_booking_1.refresh_from_db()
     assert response.status_code == status.HTTP_200_OK
@@ -268,7 +297,7 @@ def test_BookingViewSet_change_status_confirmed(test_booking_1):
 
 def test_BookingViewSet_change_status_confirmed_invalid_token(test_booking_1):
     client = APIClient()
-    response = client.get("/api/bookings/status_confirmed/?token=invalid_token")
+    response = client.patch("/api/bookings/status_confirmed/?token=invalid_token")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.data["error"] == "Invalid token"
 
@@ -276,7 +305,7 @@ def test_BookingViewSet_change_status_confirmed_invalid_token(test_booking_1):
 def test_BookingViewSet_change_status_confirmed_not_found_booking(test_booking_1):
     fake_token = uuid.uuid4()
     client = APIClient()
-    response = client.get(f"/api/bookings/status_confirmed/?token={fake_token}")
+    response = client.patch(f"/api/bookings/status_confirmed/?token={fake_token}")
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert response.data["error"] == "Booking not found"
 
@@ -299,7 +328,7 @@ def test_BookingViewSet_change_status_confirmed_status_different_than_pending(
     client = APIClient()
     test_booking_1.status = booking_status
     test_booking_1.save()
-    response = client.get(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
+    response = client.patch(f"/api/bookings/status_confirmed/?token={test_booking_1.confirmation_token}")
     assert response.status_code == excepted_status
     assert response.data["error"] == "Booking status must be PENDING"
 
@@ -338,7 +367,7 @@ def test_BookingViewSet_change_status_completed_permission(
     if user == "normal_user":
         client.force_authenticate(user=test_user_2)
 
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_completed/")
     test_booking_1.refresh_from_db()
     assert response.status_code == expected_status
 
@@ -369,7 +398,7 @@ def test_BookingViewSet_change_status_completed_different_than_confirmed(
     test_booking_1.status = booking_status
     test_booking_1.save()
 
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_completed/")
     assert response.status_code == excepted_status
     assert response.data["error"] == "Booking status must be CONFIRMED"
 
@@ -382,14 +411,14 @@ def test_BookingViewSet_change_status_completed_booking_date_in_the_future(test_
     test_booking_1.date = datetime.today() + timedelta(days=1)
     test_booking_1.save()
 
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_completed/")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.data["error"] == "The booking hasn't taken place yet."
 
 
 def test_BookingViewSet_change_status_completed_requires_authentication(test_booking_1):
     client = APIClient()
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_completed/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_completed/")
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
@@ -406,7 +435,7 @@ def test_BookingViewSet_change_status_cancelled_owner_of_booking(test_booking_1,
     test_booking_1.date = (datetime.today() + timedelta(days=3)).date()
     test_booking_1.status = Booking.Status.CONFIRMED
     test_booking_1.save()
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
     test_booking_1.refresh_from_db()
     assert response.status_code == status.HTTP_200_OK
     assert test_booking_1.status == Booking.Status.CANCELLED
@@ -421,7 +450,7 @@ def test_BookingViewSet_change_status_cancelled_owner_of_booking_too_late(test_b
     test_booking_1.date = (datetime.today() + timedelta(days=1)).date()
     test_booking_1.status = Booking.Status.CONFIRMED
     test_booking_1.save()
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
     test_booking_1.refresh_from_db()
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert test_booking_1.status == Booking.Status.CONFIRMED
@@ -460,7 +489,7 @@ def test_BookingViewSet_change_status_cancelled_member_or_owner_of_restaurant(
     test_booking_1.status = Booking.Status.CONFIRMED
     test_booking_1.date = (datetime.today() - timedelta(days=1)).date()
     test_booking_1.save()
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
     test_booking_1.refresh_from_db()
     assert response.status_code == expected_status
     if expected_status == status.HTTP_200_OK:
@@ -486,7 +515,7 @@ def test_BookingViewSet_change_status_cancelled_differente_than_confirmed(
     client.force_authenticate(user=test_owner)
     test_booking_1.status = booking_status
     test_booking_1.save()
-    response = client.get(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
+    response = client.patch(f"/api/bookings/{test_booking_1.id}/status_cancelled/")
     test_booking_1.refresh_from_db()
     assert response.status_code == expected_status
     assert response.data["error"] == "Booking status must be CONFIRMED"
