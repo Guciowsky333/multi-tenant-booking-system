@@ -195,7 +195,7 @@ def change_booking_status_to_no_show(booking: Booking) -> bool:
     user_bookings_status_no_show = Booking.objects.filter(restaurant=restaurant, user=user, status="no_show").count()
     if user_bookings_status_no_show >= no_show_ban_threshold:
         # Ban user in the restaurant
-        RestaurantBan.objects.create(
+        RestaurantBan.objects.get_or_create(
             restaurant=restaurant, user=user, description="The user failed to show up for their booking too many times."
         )
     return True
