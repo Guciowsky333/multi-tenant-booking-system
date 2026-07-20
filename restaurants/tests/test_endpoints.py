@@ -1,8 +1,21 @@
+from datetime import date, datetime, time, timedelta
+
 import pytest
 from rest_framework.test import APIClient
 
+from booking_system.models import Booking
 from restaurants.models import CuisineType, Restaurant
 from user_reviews.models import Review
+
+
+def next_monday():
+    """
+    Returns date of the next Monday.
+    Test_available_rule in our test_restaurant in set on monday so in fild date we will use this function
+    """
+    today = date.today()
+    days_until_next_monday = (6 - today.weekday()) + 1
+    return today + timedelta(days=days_until_next_monday)
 
 
 # Test for api/restaurants/all_cuisine_type/
@@ -436,3 +449,72 @@ def test_RestaurantViewSet_get_revies_cache_invalidation(
     # Send second request should return 3 reviews not 2 from cache
     response = client.get(f"/api/restaurants/{test_restaurant.id}/reviews/")
     assert response.data["count"] == 3
+
+
+# Tests /api/restaurants/id/available_hours/
+def test_RestaurantViewSet_available_hours(test_restaurant, test_available_rule, test_user, test_restaurant_table):
+    """
+    The test restaurant has no existing bookings for the provided date.
+    According to test_available_rule, the restaurant is open on Mondays from 08:00 to 22:00.
+
+    The restaurant reservation interval is set to 30 minutes, so available slots
+    should be generated every 2 hours:
+    08:00, 08:30, 09:00, 09:30, etc.
+
+    The last available slot is 20:30 instead of 22:00 because the reservation duration
+    is 90 minutes. A user cannot create a reservation if it would exceed the restaurant
+    closing time.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+
+    # Monday because test_available_rule is configured for Mondays
+    test_date = next_monday().strftime("%Y-%m-%d")
+
+    response = client.get(
+        f"/api/restaurants/{test_restaurant.id}/available_hours/?date={test_date}&guests={test_restaurant_table.seats}"
+    )
+    assert response.status_code == 200
+    assert response.data["date"] == test_date
+
+    # Check the first two available slots and the last available slot
+    assert response.data["all_available_hours"][0] == "08:00"
+    assert response.data["all_available_hours"][1] == "08:30"
+    assert response.data["all_available_hours"][-1] == "20:30"
+    assert len(response.data["all_available_hours"]) == 26
+
+
+def test_RestaurantViewSet_available_hours_excludes_booked_slot(
+    test_restaurant, test_available_rule, test_user, test_restaurant_table
+):
+    """
+    The rules are the same as in test above but this time we create 1 booking object at provided date
+    with start_time at 8:00 so now the first available time slot should be 09:30 (only when the created booking will end)
+    and our all_available_hours should be less by 3 time slots than in test above because created booking will run from 8:00 to 9:30
+    because reservation_duration_minutes = 90 minutes in the restaurant.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    # Monday because test_available_rule is configured for Mondays
+    test_date = next_monday().strftime("%Y-%m-%d")
+    Booking.objects.create(
+        user=test_user,
+        restaurant=test_restaurant,
+        table=test_restaurant_table,
+        date=datetime.strptime(test_date, "%Y-%m-%d").date(),
+        start_time=time(8, 0, 0),
+    )
+
+    response = client.get(
+        f"/api/restaurants/{test_restaurant.id}/available_hours/?date={test_date}&guests={test_restaurant_table.seats}"
+    )
+
+    assert response.status_code == 200
+    assert response.data["date"] == test_date
+
+    # Now first should be 10:00 not 8:00
+    assert response.data["all_available_hours"][0] == "09:30"
+    assert response.data["all_available_hours"][1] == "10:00"
+    assert response.data["all_available_hours"][-1] == "20:30"
+
+    assert len(response.data["all_available_hours"]) == 23

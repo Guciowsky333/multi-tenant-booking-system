@@ -58,6 +58,7 @@ def test_restaurant(db, test_owner, test_cuisine_type):
         owner=test_owner,
         cuisine_type=test_cuisine_type,
         no_show_ban_threshold=3,
+        reservation_interval_minutes=30,
     )
 
 

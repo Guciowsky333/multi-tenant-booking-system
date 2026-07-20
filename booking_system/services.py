@@ -98,7 +98,10 @@ def searching_first_available_table(
             restaurant=restaurant,
             date=date,
             table=table,
-            status__in=["PENDING", "CONFIRMED"],
+            status__in=[
+                Booking.Status.PENDING,
+                Booking.Status.CONFIRMED,
+            ],
             start_time__lt=booking_end_time,
             end_time__gt=start_time,
         ).exists():

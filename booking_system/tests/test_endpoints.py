@@ -234,10 +234,40 @@ def test_BookingViewSet_post_not_available_tables(test_user, test_restaurant, te
         "restaurant": test_restaurant.id,
         "guests": 4,
         "date": next_monday(),
-        "start_time": "16:30:00",
+        "start_time": "16:00:00",
     }
     response = client.post("/api/bookings/", body)
     assert response.status_code == 400
+    assert response.data["error"] == "No free tables available at provided time and date"
+
+
+def test_BookingViewSet_post_booking_already_exist_at_provided_time(
+    test_user, test_restaurant, test_available_rule, test_restaurant_table
+):
+    """
+    In this test we create booking object at time 16:00, and we expect that when another user want
+    creates another booking during this booking endpoint should return 400 because at provided time booking already exist and
+    there is no others available tables at that time.
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_user)
+    Booking.objects.create(
+        restaurant=test_restaurant,
+        table=test_restaurant_table,
+        user=test_user,
+        date=next_monday(),
+        start_time=time(16, 0, 0),
+    )
+
+    body = {
+        "restaurant": test_restaurant.id,
+        "guests": 4,
+        "date": next_monday(),
+        "start_time": "16:00:00",
+    }
+    response = client.post("/api/bookings/", body)
+    assert response.status_code == 400
+    print(response.data)
     assert response.data["error"] == "No free tables available at provided time and date"
 
 

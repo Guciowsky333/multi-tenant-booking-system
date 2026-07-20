@@ -4,7 +4,7 @@ from django.core.cache import cache
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -18,6 +18,7 @@ from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permisions import IsRestaurantManagerOrOwner
 from restaurants.serializers import CuisineTypeSerializer, RestaurantDetailSerializer, RestaurantSerializer
+from restaurants.services import get_available_hours_per_day
 from user_reviews.serializers import ReviewSerializer
 
 
@@ -120,7 +121,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
             cache.set(cache_key, data, timeout=300)
 
-        return Response(data)
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="reviews")
     def reviews(self, request, pk=None):
@@ -142,4 +143,20 @@ class RestaurantViewSet(viewsets.ModelViewSet):
                 "results": serializer.data,
             }
             cache.set(cache_key, data, timeout=300)
-        return Response(data)
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"], url_path="available_hours")
+    def available_hours_per_day(self, request, pk=None):
+        date = request.query_params.get("date")
+        guests = request.query_params.get("guests")
+        try:
+            all_available_hours = get_available_hours_per_day(self.get_object(), date, guests)
+            return Response(
+                {
+                    "date": date,
+                    "all_available_hours": all_available_hours,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
