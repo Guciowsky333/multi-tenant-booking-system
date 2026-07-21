@@ -341,7 +341,7 @@ def test_BookingViewSet_change_status_confirmed(test_booking_1):
 
     test_booking_1.refresh_from_db()
     assert response.status_code == status.HTTP_200_OK
-    assert test_booking_1.status == "confirmed"
+    assert test_booking_1.status == Booking.Status.CONFIRMED
 
 
 def test_BookingViewSet_change_status_confirmed_invalid_token(test_booking_1):

@@ -114,9 +114,13 @@ def searching_first_available_table(
     return allowed_table
 
 
-def change_booking_status_to_confirmed(token: str) -> bool:
+def change_booking_status_to_confirmed(token: str) -> Booking:
     """
-    Returns True if booking exist and its status is PENDING and changes its status to CONFIRMED.
+    Returns booking object if booking exist and its status is PENDING and changes its status to CONFIRMED.
+
+    Important: This function returns booking because after we change status to CONFIRMED in
+    "change_status_confirmed" action celery send reminder email to user and in this task we will
+    need id of this booking object to check if its status is still CONFIRMED.
     """
     with transaction.atomic():
         try:
@@ -132,7 +136,7 @@ def change_booking_status_to_confirmed(token: str) -> bool:
 
         booking.status = Booking.Status.CONFIRMED
         booking.save()
-        return True
+        return booking
 
 
 def change_booking_status_to_completed(booking: Booking) -> bool:

@@ -1,4 +1,6 @@
 # Create your views here.
+from datetime import datetime, timedelta
+
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -19,7 +21,11 @@ from booking_system.services import (
     change_booking_status_to_no_show,
     create_booking,
 )
-from booking_system.tasks import cancelled_booking_after_30_minutes, send_booking_confirmation_email
+from booking_system.tasks import (
+    cancelled_booking_after_30_minutes,
+    send_booking_confirmation_email,
+    send_reminder_email,
+)
 
 
 class BookingPagination(PageNumberPagination):
@@ -80,7 +86,10 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
     @extend_schema(
         summary="Changes status from pending to confirmed.",
         description="""
-               Changes the status of the booking from pending to confirmed by confirmation_token.
+               Changes the status of the booking from pending to confirmed by confirmation_token that was
+               sent to the user at the moment of create.
+               Send reminder email to the user 1 day before reservation if status of the booking
+               will be still confirmed.
 
                Business rules:
                - Every user has access to this endpoint, even without logging in, provided they supply a valid `confirmation_token`.
@@ -96,8 +105,24 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
     def change_status_confirmed(self, request):
         token = request.query_params.get("token")
         try:
-            change_booking_status_to_confirmed(token)
-            return Response({"status": "Status has been changed correctly"}, status=status.HTTP_200_OK)
+            booking = change_booking_status_to_confirmed(token)
+            reminder_date = datetime.combine(booking.date, booking.start_time) - timedelta(days=1)
+            send_reminder_email.apply_async(
+                args=[
+                    booking.user.email,
+                    booking.id,
+                ],
+                eta=reminder_date,
+            )
+            return Response(
+                {
+                    "status": """
+                            Status has been changed correctly, we will send to you 
+                            reminder email 1 day before the reservation.
+            """
+                },
+                status=status.HTTP_200_OK,
+            )
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
