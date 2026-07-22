@@ -157,7 +157,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             all_available_hours = get_available_hours_per_day(self.get_object(), provided_date, guests)
             return Response(
                 {
-                    "date": date,
+                    "date": provided_date,
                     "all_available_hours": all_available_hours,
                 },
                 status=status.HTTP_200_OK,
