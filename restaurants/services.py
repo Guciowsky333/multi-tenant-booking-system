@@ -1,10 +1,13 @@
 from datetime import datetime, time, timedelta
 
+from django.db.models import QuerySet
+
+from booking_system.models import Booking
 from booking_system.services import searching_first_available_table
 from restaurants.models import Restaurant
 
 
-def get_available_hours_per_day(restaurant: Restaurant, date: str, guests: int) -> list:
+def get_available_hours_per_day(restaurant: Restaurant, date: str, guests: int) -> list[str]:
     """
     Returns a list with all available hours on the provided date.
 
@@ -62,3 +65,26 @@ def get_available_hours_per_day(restaurant: Restaurant, date: str, guests: int) 
         current_time += timedelta(minutes=reservation_interval_minutes)
 
     return all_available_hours
+
+
+def get_all_bookings_per_day(restaurant: Restaurant, date: str) -> QuerySet[Booking]:
+    """
+    Returns all bookings at provided date with status confirmed, completed or no_show sorted by start_time
+    """
+    if not restaurant or not date:
+        raise ValueError("Fields (restaurant, date) are required")
+
+    try:
+        date_object = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError("Invalid date format")
+    all_bookings = Booking.objects.filter(
+        restaurant=restaurant,
+        date=date_object,
+        status__in=[
+            Booking.Status.CONFIRMED,
+            Booking.Status.COMPLETED,
+            Booking.Status.NO_SHOW,
+        ],
+    ).order_by("start_time")
+    return all_bookings

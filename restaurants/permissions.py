@@ -17,3 +17,14 @@ class IsRestaurantManagerOrOwner(permissions.BasePermission):
         is_owner = request.user == obj.owner
         is_manager_member = MemberShip.objects.filter(restaurant=obj, user=request.user, role="manager").exists()
         return is_owner or is_manager_member
+
+
+class IsRestaurantMemberOrOwner(permissions.BasePermission):
+    """
+    Returns 200 for members or owner of provided restaurant.
+
+    Used in all_bookings_per_day action
+    """
+
+    def has_object_permission(self, request, view, obj):
+        return request.user == obj.owner or MemberShip.objects.filter(restaurant=obj, user=request.user).exists()
