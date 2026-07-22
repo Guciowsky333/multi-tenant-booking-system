@@ -51,7 +51,7 @@ class Restaurant(models.Model):
 
 
 class RestaurantBan(models.Model):
-    description = models.TextField(null=True, blank=True)
+    description = models.TextField(null=True, blank=True, max_length=500)
     restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -60,4 +60,8 @@ class RestaurantBan(models.Model):
         return self.user.email
 
     class Meta:
+        """
+        Each user can have only one RestaurantBan object per restaurant.
+        """
+
         constraints = [models.UniqueConstraint(fields=["restaurant", "user"], name="unique_ban_per_restaurant_user")]

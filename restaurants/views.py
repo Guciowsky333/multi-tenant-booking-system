@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -18,9 +19,9 @@ from booking_system.serializers import BookingSerializer
 from menus.models import Menu
 from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
-from restaurants.permissions import IsRestaurantManagerOrOwner, IsRestaurantMemberOrOwner
+from restaurants.permissions import IsRestaurantManagerOrOwner, IsRestaurantMemberOrOwner, RestaurantPermission
 from restaurants.serializers import CuisineTypeSerializer, RestaurantDetailSerializer, RestaurantSerializer
-from restaurants.services import get_all_bookings_per_day, get_available_hours_per_day
+from restaurants.services import create_restaurant_ban, get_all_bookings_per_day, get_available_hours_per_day
 from user_reviews.serializers import ReviewSerializer
 
 
@@ -57,9 +58,11 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["update", "partial_update", "destroy"]:
-            return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
+            return [IsAuthenticated(), RestaurantPermission()]
         if self.action == "all_bookings_per_day":
             return [IsAuthenticated(), IsRestaurantMemberOrOwner()]
+        if self.action == "ban_user":
+            return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -179,5 +182,22 @@ class RestaurantViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_200_OK,
             )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["post"], url_path="ban_user")
+    def ban_user(self, request, pk=None):
+        email = request.data.get("email")
+        description = request.data.get("description")
+        try:
+            create_restaurant_ban(self.get_object(), email, description)
+            return Response(
+                {
+                    "message": "User has been banned",
+                },
+                status=status.HTTP_200_OK,
+            )
+        except NotFound as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

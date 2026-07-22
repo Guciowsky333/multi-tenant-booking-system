@@ -1,10 +1,13 @@
 from datetime import datetime, time, timedelta
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import QuerySet
+from rest_framework.exceptions import NotFound
 
+from accounts.models import CustomUser
 from booking_system.models import Booking
 from booking_system.services import searching_first_available_table
-from restaurants.models import Restaurant
+from restaurants.models import Restaurant, RestaurantBan
 
 
 def get_available_hours_per_day(restaurant: Restaurant, date: str, guests: int) -> list[str]:
@@ -88,3 +91,18 @@ def get_all_bookings_per_day(restaurant: Restaurant, date: str) -> QuerySet[Book
         ],
     ).order_by("start_time")
     return all_bookings
+
+
+def create_restaurant_ban(restaurant: Restaurant, email: str, description=None) -> None:
+    if not email:
+        raise ValueError("Email is required")
+    try:
+        user = CustomUser.objects.get(email=email)
+    except ObjectDoesNotExist:
+        raise NotFound("User with provided email does not exist")
+
+    RestaurantBan.objects.create(
+        restaurant=restaurant,
+        user=user,
+        description=description,
+    )
