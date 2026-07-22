@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "memberships",
     "user_reviews",
     "menus",
+    "booking_system",
 ]
 
 MIDDLEWARE = [
@@ -166,8 +167,8 @@ SPECTACULAR_SETTINGS = {
 
 AUTH_USER_MODEL = "accounts.CustomUser"
 
-CELERY_BROKER_URL = "redis://redis:6379/0"
-CELERY_RESULT_BACKEND = "redis://redis:6379/0"
+CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -181,3 +182,6 @@ CACHES = {
         },
     }
 }
+
+
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

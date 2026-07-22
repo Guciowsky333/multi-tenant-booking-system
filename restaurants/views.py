@@ -1,10 +1,11 @@
+from datetime import date
 from urllib.parse import urlencode
 
 from django.core.cache import cache
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -13,11 +14,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantTable
+from booking_system.serializers import BookingSerializer
 from menus.models import Menu
 from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
-from restaurants.permisions import IsRestaurantManagerOrOwner
+from restaurants.permissions import IsRestaurantManagerOrOwner, IsRestaurantMemberOrOwner
 from restaurants.serializers import CuisineTypeSerializer, RestaurantDetailSerializer, RestaurantSerializer
+from restaurants.services import get_all_bookings_per_day, get_available_hours_per_day
 from user_reviews.serializers import ReviewSerializer
 
 
@@ -55,6 +58,8 @@ class RestaurantViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ["update", "partial_update", "destroy"]:
             return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
+        if self.action == "all_bookings_per_day":
+            return [IsAuthenticated(), IsRestaurantMemberOrOwner()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -120,7 +125,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
             cache.set(cache_key, data, timeout=300)
 
-        return Response(data)
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="reviews")
     def reviews(self, request, pk=None):
@@ -142,4 +147,37 @@ class RestaurantViewSet(viewsets.ModelViewSet):
                 "results": serializer.data,
             }
             cache.set(cache_key, data, timeout=300)
-        return Response(data)
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["get"], url_path="available_hours")
+    def available_hours_per_day(self, request, pk=None):
+        provided_date = request.query_params.get("date")
+        guests = request.query_params.get("guests")
+        try:
+            all_available_hours = get_available_hours_per_day(self.get_object(), provided_date, guests)
+            return Response(
+                {
+                    "date": provided_date,
+                    "all_available_hours": all_available_hours,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["get"], url_path="all_bookings")
+    def all_bookings_per_day(self, request, pk=None):
+
+        provided_date = request.query_params.get("date", str(date.today()))
+        try:
+            all_bookings = get_all_bookings_per_day(self.get_object(), provided_date)
+            serializer = BookingSerializer(all_bookings, many=True)
+            return Response(
+                {
+                    "date": provided_date,
+                    "all_bookings": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

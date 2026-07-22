@@ -81,3 +81,10 @@ class RestaurantException(models.Model):
 
     opening_time = models.TimeField(null=True, blank=True)
     closing_time = models.TimeField(null=True, blank=True)
+
+    class Meta:
+        """
+        Each restaurant can have only one exception per day
+        """
+
+        constraints = [models.UniqueConstraint(fields=["restaurant", "date"], name="unique_date_per_restaurant")]
