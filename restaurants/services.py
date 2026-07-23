@@ -106,3 +106,21 @@ def create_restaurant_ban(restaurant: Restaurant, email: str, description=None) 
         user=user,
         description=description,
     )
+
+
+def unban_user(restaurant: Restaurant, email: str) -> None:
+    """
+    Deletes RestaurantBan object with given user if it exists.
+    """
+    if not email:
+        raise ValueError("Email is required")
+    try:
+        user = CustomUser.objects.get(email=email)
+    except ObjectDoesNotExist:
+        raise NotFound("User with provided email does not exist")
+
+    try:
+        user_ban = RestaurantBan.objects.get(user=user, restaurant=restaurant)
+        user_ban.delete()
+    except ObjectDoesNotExist:
+        raise ValueError("Provided user does not have ban in the restaurant")

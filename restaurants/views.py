@@ -21,7 +21,12 @@ from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permissions import IsRestaurantManagerOrOwner, IsRestaurantMemberOrOwner, RestaurantPermission
 from restaurants.serializers import CuisineTypeSerializer, RestaurantDetailSerializer, RestaurantSerializer
-from restaurants.services import create_restaurant_ban, get_all_bookings_per_day, get_available_hours_per_day
+from restaurants.services import (
+    create_restaurant_ban,
+    get_all_bookings_per_day,
+    get_available_hours_per_day,
+    unban_user,
+)
 from user_reviews.serializers import ReviewSerializer
 
 
@@ -61,7 +66,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), RestaurantPermission()]
         if self.action == "all_bookings_per_day":
             return [IsAuthenticated(), IsRestaurantMemberOrOwner()]
-        if self.action == "ban_user":
+        if self.action in ["ban_user", "unban_user"]:
             return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
 
@@ -195,7 +200,23 @@ class RestaurantViewSet(viewsets.ModelViewSet):
                 {
                     "message": "User has been banned",
                 },
-                status=status.HTTP_200_OK,
+                status=status.HTTP_201_CREATED,
+            )
+        except NotFound as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["delete"], url_path="unban_user")
+    def unban_user(self, request, pk=None):
+        email = request.query_params.get("email")
+        try:
+            unban_user(self.get_object(), email)
+            return Response(
+                {
+                    "message": "User has been unbanned",
+                },
+                status=status.HTTP_204_NO_CONTENT,
             )
         except NotFound as e:
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
