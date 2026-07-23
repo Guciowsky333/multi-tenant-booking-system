@@ -212,12 +212,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         email = request.query_params.get("email")
         try:
             unban_user(self.get_object(), email)
-            return Response(
-                {
-                    "message": "User has been unbanned",
-                },
-                status=status.HTTP_204_NO_CONTENT,
-            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
         except NotFound as e:
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
         except ValueError as e:
