@@ -124,3 +124,15 @@ def unban_user(restaurant: Restaurant, email: str) -> None:
         user_ban.delete()
     except ObjectDoesNotExist:
         raise ValueError("Provided user does not have ban in the restaurant")
+
+
+def show_all_bans(restaurant: Restaurant, ordering=str) -> QuerySet[RestaurantBan]:
+    """
+    Returns list of all bans at provided restaurant.
+    User can also provide filed "ordering" (default = "created_at", allowed = "created_at", "-created_at"
+    """
+    if ordering not in ["created_at", "-created_at"]:
+        raise ValueError("Invalid ordering")
+
+    all_bans = RestaurantBan.objects.filter(restaurant=restaurant).order_by(f"{ordering}")
+    return all_bans

@@ -800,3 +800,106 @@ def test_RestaurantViewSet_unban_user_ban_not_exist(test_owner, test_restaurant,
     response = client.delete(f"/api/restaurants/{test_restaurant.id}/unban_user/?email={test_user_1.email}")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert response.data["error"] == "Provided user does not have ban in the restaurant"
+
+
+# Tests /api/restaurants/id/list_bans/
+@pytest.mark.parametrize(
+    "user_status, expected_status",
+    [
+        ("unauthorized_user", status.HTTP_401_UNAUTHORIZED),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+        ("staff", status.HTTP_403_FORBIDDEN),
+        ("manager", status.HTTP_200_OK),
+        ("owner", status.HTTP_200_OK),
+    ],
+)
+def test_RestaurantViewSet_list_bans_permission(
+    user_status,
+    expected_status,
+    test_user_3,
+    test_membership_staff,
+    test_membership_manager,
+    test_owner,
+    test_restaurant,
+    test_restaurant_ban,
+):
+    """
+    Only manager or owner of provided restaurant are allowed check list all banned users.
+    """
+    client = APIClient()
+    if user_status == "unauthorized_user":
+        client.force_authenticate()
+    if user_status == "normal_user":
+        client.force_authenticate(test_user_3)
+    if user_status == "staff":
+        client.force_authenticate(test_membership_staff.user)
+    if user_status == "manager":
+        client.force_authenticate(test_membership_manager.user)
+    if user_status == "owner":
+        client.force_authenticate(test_owner)
+
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/list_bans/?page=1")
+    print(response.data)
+    assert response.status_code == expected_status
+
+    if expected_status == status.HTTP_200_OK:
+        # test_restaurant has only one ban "test_restaurant_ban"
+        assert len(response.data["results"]) == 1
+        assert response.data["results"][0]["id"] == test_restaurant_ban.id
+
+
+@pytest.mark.parametrize(
+    "ordering, expected_status",
+    [
+        ("created_at", status.HTTP_200_OK),
+        ("-created_at", status.HTTP_200_OK),
+        ("invalid_ordering", status.HTTP_400_BAD_REQUEST),
+    ],
+)
+def test_RestaurantViewSet_list_bans_ordering(
+    ordering, expected_status, test_owner, test_restaurant, test_user_1, test_user_2
+):
+    """
+    In this test we create 2 RestaurantBan in our Restaurant and check whether our endpoint
+    show them in correct ordering.
+
+    Action list_bans allowed manger or owner to provide filed ordering in query_params.
+    Allowed ordering ("created_at", "-created_at") if user does not provide this filed default = "created_at"
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    ban_1 = RestaurantBan.objects.create(
+        user=test_user_1,
+        restaurant=test_restaurant,
+        description="test description 1",
+    )
+    ban_2 = RestaurantBan.objects.create(
+        user=test_user_2,
+        restaurant=test_restaurant,
+        description="test description 2",
+    )
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/list_bans/?ordering={ordering}")
+    assert response.status_code == expected_status
+    if expected_status == status.HTTP_200_OK:
+        # If field ordering = created_at ban_1 should be first because it has older date of creating
+        if ordering == "created_at":
+            assert response.data["results"][0]["id"] == ban_1.id
+            assert response.data["results"][1]["id"] == ban_2.id
+        # If field ordering = -created_at ban_2 should be first because it has earlier date of creating
+        if ordering == "-created_at":
+            assert response.data["results"][0]["id"] == ban_2.id
+            assert response.data["results"][1]["id"] == ban_1.id
+
+
+def test_RestaurantViewSet_list_bans_restaurant_not_exist(test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get("/api/restaurants/not_exist_restaurant/list_bans/")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_RestaurantViewSet_list_bans_returns_404_for_invalid_page(test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/list_bans/?page=invalid_page")
+    assert response.status_code == status.HTTP_404_NOT_FOUND

@@ -20,11 +20,17 @@ from menus.models import Menu
 from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
 from restaurants.permissions import IsRestaurantManagerOrOwner, IsRestaurantMemberOrOwner, RestaurantPermission
-from restaurants.serializers import CuisineTypeSerializer, RestaurantDetailSerializer, RestaurantSerializer
+from restaurants.serializers import (
+    CuisineTypeSerializer,
+    RestaurantBanSerializer,
+    RestaurantDetailSerializer,
+    RestaurantSerializer,
+)
 from restaurants.services import (
     create_restaurant_ban,
     get_all_bookings_per_day,
     get_available_hours_per_day,
+    show_all_bans,
     unban_user,
 )
 from user_reviews.serializers import ReviewSerializer
@@ -32,6 +38,10 @@ from user_reviews.serializers import ReviewSerializer
 
 class RestaurantPagination(PageNumberPagination):
     page_size = 10
+
+
+class RestaurantBanPagination(PageNumberPagination):
+    page_size = 20
 
 
 # Create your views here.
@@ -66,7 +76,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), RestaurantPermission()]
         if self.action == "all_bookings_per_day":
             return [IsAuthenticated(), IsRestaurantMemberOrOwner()]
-        if self.action in ["ban_user", "unban_user"]:
+        if self.action in ["ban_user", "unban_user", "list_bans"]:
             return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
 
@@ -215,5 +225,17 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except NotFound as e:
             return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["get"], url_path="list_bans")
+    def list_bans(self, request, pk=None):
+        ordering = request.query_params.get("ordering", "created_at")
+        self.parser_classes = RestaurantBanPagination
+        try:
+            queryset = show_all_bans(self.get_object(), ordering)
+            page = self.paginate_queryset(queryset)
+            serializer = RestaurantBanSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

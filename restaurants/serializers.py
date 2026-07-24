@@ -6,7 +6,7 @@ from available_rules.serializers import (
     RestaurantTableBriefSerializer,
 )
 from menus.serializers import MenuBriefSerializer
-from restaurants.models import CuisineType, Restaurant
+from restaurants.models import CuisineType, Restaurant, RestaurantBan
 
 
 class CuisineTypeSerializer(serializers.ModelSerializer):
@@ -70,3 +70,18 @@ class RestaurantDetailSerializer(serializers.ModelSerializer):
             "restaurant_breaks",
             "restaurant_tables",
         ]
+
+
+class RestaurantBanSerializer(serializers.ModelSerializer):
+    restaurant_name = serializers.SerializerMethodField()
+    user_email = serializers.SerializerMethodField()
+
+    def get_restaurant_name(self, obj):
+        return obj.restaurant.name
+
+    def get_user_email(self, obj):
+        return obj.user.email
+
+    class Meta:
+        model = RestaurantBan
+        fields = ["id", "user", "user_email", "restaurant", "restaurant_name", "description", "created_at"]
