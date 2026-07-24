@@ -85,3 +85,13 @@ class RestaurantBanSerializer(serializers.ModelSerializer):
     class Meta:
         model = RestaurantBan
         fields = ["id", "user", "user_email", "restaurant", "restaurant_name", "description", "created_at"]
+        read_only_fields = ["id", "user_email", "restaurant_name"]
+
+
+class RestaurantBanSwaggerSerializer(serializers.Serializer):
+    """
+    Use only to swagger docs
+    """
+
+    email = serializers.EmailField()
+    description = serializers.CharField(required=False, allow_null=True, allow_blank=True)
