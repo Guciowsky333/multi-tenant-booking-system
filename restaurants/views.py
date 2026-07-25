@@ -28,6 +28,7 @@ from restaurants.serializers import (
     RestaurantSerializer,
 )
 from restaurants.services import (
+    check_if_user_is_banned,
     create_restaurant_ban,
     get_all_bookings_per_day,
     get_available_hours_per_day,
@@ -77,7 +78,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), RestaurantPermission()]
         if self.action == "all_bookings_per_day":
             return [IsAuthenticated(), IsRestaurantMemberOrOwner()]
-        if self.action in ["ban_user", "unban_user", "list_bans"]:
+        if self.action in ["ban_user", "unban_user", "list_bans", "check_user"]:
             return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
 
@@ -218,7 +219,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             201: OpenApiResponse(description="RestaurantBan object created correctly"),
             400: OpenApiResponse(description="Validation error"),
             404: OpenApiResponse(description="Restaurant not found/ User with provided email does not exist"),
-            403: OpenApiResponse(description="User has not permission to this endpoint"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
             401: OpenApiResponse(description="User is not authorized"),
         },
     )
@@ -257,7 +258,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             204: OpenApiResponse(description="Deletes object RestaurantBan correctly"),
             400: OpenApiResponse(description="Provided user does not have ban in the restaurant"),
             404: OpenApiResponse(description="Restaurant not found/ User with provided email does not exist"),
-            403: OpenApiResponse(description="User has not permission to this endpoint"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
             401: OpenApiResponse(description="User is not authorized"),
         },
     )
@@ -293,7 +294,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             200: OpenApiResponse(description="list all users with ban at provided restaurant"),
             400: OpenApiResponse(description="Invalid ordering field"),
             404: OpenApiResponse(description="Restaurant not found"),
-            403: OpenApiResponse(description="User has not permission to this endpoint"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
             401: OpenApiResponse(description="User is not authorized"),
         },
     )
@@ -308,3 +309,40 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             return self.get_paginated_response(serializer.data)
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Shows RestaurantBan object for provided user",
+        description="""
+        Shows if user with provided email has ban at provided restaurant or not.
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - Request user has to be manager or owner of provided restaurant.
+        - Field email is required.
+        - User with provided email must exist.
+        - If provided user does not have ban return 404
+        """,
+        parameters=[
+            OpenApiParameter(name="email", required=True, description="User email"),
+        ],
+        responses={
+            200: OpenApiResponse(description="Shows RestaurantBan object for provided user"),
+            400: OpenApiResponse(description="Field email is required"),
+            404: OpenApiResponse(
+                description="Restaurant not found/ User does not exist/ Provided user does not have ban"
+            ),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
+    )
+    @action(detail=True, methods=["get"], url_path="check_user")
+    def check_user(self, request, pk=None):
+        email = request.query_params.get("email")
+        try:
+            user_ban = check_if_user_is_banned(self.get_object(), email)
+            serializer = RestaurantBanSerializer(user_ban)
+            return Response(serializer.data)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except NotFound as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
