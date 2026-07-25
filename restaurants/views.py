@@ -301,7 +301,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["get"], url_path="list_bans")
     def list_bans(self, request, pk=None):
         ordering = request.query_params.get("ordering", "created_at")
-        self.parser_classes = RestaurantBanPagination
+        self.pagination_class = RestaurantBanPagination
         try:
             queryset = show_all_bans(self.get_object(), ordering)
             page = self.paginate_queryset(queryset)
