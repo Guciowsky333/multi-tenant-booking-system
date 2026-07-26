@@ -4,9 +4,10 @@ from urllib.parse import urlencode
 from django.core.cache import cache
 from django.db.models import Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -18,14 +19,31 @@ from booking_system.serializers import BookingSerializer
 from menus.models import Menu
 from restaurants.filters import RestaurantFilter
 from restaurants.models import CuisineType, Restaurant
-from restaurants.permissions import IsRestaurantManagerOrOwner, IsRestaurantMemberOrOwner
-from restaurants.serializers import CuisineTypeSerializer, RestaurantDetailSerializer, RestaurantSerializer
-from restaurants.services import get_all_bookings_per_day, get_available_hours_per_day
+from restaurants.permissions import IsRestaurantManagerOrOwner, IsRestaurantMemberOrOwner, RestaurantPermission
+from restaurants.serializers import (
+    CuisineTypeSerializer,
+    RestaurantBanSerializer,
+    RestaurantBanSwaggerSerializer,
+    RestaurantDetailSerializer,
+    RestaurantSerializer,
+)
+from restaurants.services import (
+    check_if_user_is_banned,
+    create_restaurant_ban,
+    get_all_bookings_per_day,
+    get_available_hours_per_day,
+    show_all_bans,
+    unban_user,
+)
 from user_reviews.serializers import ReviewSerializer
 
 
 class RestaurantPagination(PageNumberPagination):
     page_size = 10
+
+
+class RestaurantBanPagination(PageNumberPagination):
+    page_size = 20
 
 
 # Create your views here.
@@ -57,9 +75,11 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["update", "partial_update", "destroy"]:
-            return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
+            return [IsAuthenticated(), RestaurantPermission()]
         if self.action == "all_bookings_per_day":
             return [IsAuthenticated(), IsRestaurantMemberOrOwner()]
+        if self.action in ["ban_user", "unban_user", "list_bans", "check_user"]:
+            return [IsAuthenticated(), IsRestaurantManagerOrOwner()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -181,3 +201,148 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             )
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Ban user",
+        description="""
+        Creates RestaurantBan object for provided user at provided restaurant.
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - Request user has to be manager or owner of provided restaurant.
+        - Field email is required.
+        - User with provided email must exist.
+        - Provided user cannot be banned at provided restaurant.
+        """,
+        request=RestaurantBanSwaggerSerializer,
+        responses={
+            201: OpenApiResponse(description="RestaurantBan object created correctly"),
+            400: OpenApiResponse(description="Validation error"),
+            404: OpenApiResponse(description="Restaurant not found/ User with provided email does not exist"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="ban_user")
+    def ban_user(self, request, pk=None):
+        email = request.data.get("email")
+        description = request.data.get("description")
+        try:
+            create_restaurant_ban(self.get_object(), email, description)
+            return Response(
+                {
+                    "message": "User has been banned",
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        except NotFound as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Unban user",
+        description="""
+        Deletes object RestaurantBan for provided email at provided restaurant.
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - Request user has to be manager or owner of provided restaurant.
+        - Field email is required.
+        - User with provided email must exist and be banned in provided restaurant.
+        """,
+        parameters=[
+            OpenApiParameter(name="email", required=True, description="User email"),
+        ],
+        responses={
+            204: OpenApiResponse(description="Deletes object RestaurantBan correctly"),
+            400: OpenApiResponse(description="Provided user does not have ban in the restaurant"),
+            404: OpenApiResponse(description="Restaurant not found/ User with provided email does not exist"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
+    )
+    @action(detail=True, methods=["delete"], url_path="unban_user")
+    def unban_user(self, request, pk=None):
+        email = request.query_params.get("email")
+        try:
+            unban_user(self.get_object(), email)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except NotFound as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Shows all bans",
+        description="""
+        Shows all users with ban at provided restaurant default ordering start by the older one.
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - Request user has to be manager or owner of provided restaurant.
+        - If the user provides the "ordering" field, only two options are allowed: "created_at" and "-created_at".
+        Default = created_at
+        - If user provides page this page must exist and has objects inside.
+        Default page = 1 
+        """,
+        parameters=[
+            OpenApiParameter(name="page", required=False, description="Page"),
+            OpenApiParameter(name="ordering", required=False, description="Ordering field"),
+        ],
+        responses={
+            200: OpenApiResponse(description="list all users with ban at provided restaurant"),
+            400: OpenApiResponse(description="Invalid ordering field"),
+            404: OpenApiResponse(description="Restaurant not found"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
+    )
+    @action(detail=True, methods=["get"], url_path="list_bans")
+    def list_bans(self, request, pk=None):
+        ordering = request.query_params.get("ordering", "created_at")
+        self.pagination_class = RestaurantBanPagination
+        try:
+            queryset = show_all_bans(self.get_object(), ordering)
+            page = self.paginate_queryset(queryset)
+            serializer = RestaurantBanSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        summary="Shows RestaurantBan object for provided user",
+        description="""
+        Shows if user with provided email has ban at provided restaurant or not.
+        
+        Business rules:
+        - Request user has to be authenticated.
+        - Request user has to be manager or owner of provided restaurant.
+        - Field email is required.
+        - User with provided email must exist.
+        - If provided user does not have ban return 404
+        """,
+        parameters=[
+            OpenApiParameter(name="email", required=True, description="User email"),
+        ],
+        responses={
+            200: OpenApiResponse(description="Shows RestaurantBan object for provided user"),
+            400: OpenApiResponse(description="Field email is required"),
+            404: OpenApiResponse(
+                description="Restaurant not found/ User does not exist/ Provided user does not have ban"
+            ),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
+    )
+    @action(detail=True, methods=["get"], url_path="check_user")
+    def check_user(self, request, pk=None):
+        email = request.query_params.get("email")
+        try:
+            user_ban = check_if_user_is_banned(self.get_object(), email)
+            serializer = RestaurantBanSerializer(user_ban)
+            return Response(serializer.data)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except NotFound as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)

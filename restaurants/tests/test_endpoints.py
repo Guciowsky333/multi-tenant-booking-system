@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from booking_system.models import Booking
-from restaurants.models import CuisineType, Restaurant
+from restaurants.models import CuisineType, Restaurant, RestaurantBan
 from user_reviews.models import Review
 
 
@@ -418,7 +418,7 @@ def test_RestaurantViewSet_delete_requires_authentication():
 # Test for api/restaurants/id/reviews/
 
 
-def test_RestaurantViewSet_get_revies(test_restaurant, test_user, test_review_1, test_review_2):
+def test_get_reviews(test_restaurant, test_user, test_review_1, test_review_2):
     """
     In this test we create 2 reviews of test_restaurant and check whether our endpoint
     show us them correctly.
@@ -430,9 +430,7 @@ def test_RestaurantViewSet_get_revies(test_restaurant, test_user, test_review_1,
     assert len(response.data["results"]) == 2
 
 
-def test_RestaurantViewSet_get_revies_cache_invalidation(
-    test_restaurant, test_user, test_user_2, test_review_1, test_review_2
-):
+def test_get_reviews_cache_invalidation(test_restaurant, test_user, test_user_2, test_review_1, test_review_2):
     """
     When someone add, destroy or update a review of the restaurant cache should be cleaned so endpoint
     should return updated lists of reviews
@@ -453,7 +451,7 @@ def test_RestaurantViewSet_get_revies_cache_invalidation(
 
 
 # Tests /api/restaurants/id/available_hours/
-def test_RestaurantViewSet_available_hours(test_restaurant, test_available_rule, test_user, test_restaurant_table):
+def test_available_hours(test_restaurant, test_available_rule, test_user, test_restaurant_table):
     """
     The test restaurant has no existing bookings for the provided date.
     According to test_available_rule, the restaurant is open on Mondays from 08:00 to 22:00.
@@ -485,9 +483,7 @@ def test_RestaurantViewSet_available_hours(test_restaurant, test_available_rule,
     assert len(response.data["all_available_hours"]) == 26
 
 
-def test_RestaurantViewSet_available_hours_excludes_booked_slot(
-    test_restaurant, test_available_rule, test_user, test_restaurant_table
-):
+def test_available_hours_excludes_booked_slot(test_restaurant, test_available_rule, test_user, test_restaurant_table):
     """
     The rules are the same as in test above but this time we create 1 booking object at provided date
     with start_time at 8:00 so now the first available time slot should be 09:30 (only when the created booking will end)
@@ -524,7 +520,7 @@ def test_RestaurantViewSet_available_hours_excludes_booked_slot(
 # Tests /api/restaurants/id/all_bookings/
 
 
-def test_RestaurantViewSet_all_bookings_restaurant_owner(test_restaurant, test_owner, test_restaurant_table, test_user):
+def test_all_bookings_restaurant_owner(test_restaurant, test_owner, test_restaurant_table, test_user):
     """
     In this test we create 2 booking objects and check if endpoint correctly show them to owner of the restaurant.
     The first should be booking_2 because we sorted bookings by start_time
@@ -570,7 +566,7 @@ def test_RestaurantViewSet_all_bookings_restaurant_owner(test_restaurant, test_o
         ("owner", status.HTTP_200_OK),
     ],
 )
-def test_RestaurantViewSet_all_bookings_permissions(
+def test_all_bookings_permissions(
     user_status,
     expected_status,
     test_user_3,
@@ -598,9 +594,7 @@ def test_RestaurantViewSet_all_bookings_permissions(
     assert response.status_code == expected_status
 
 
-def test_RestaurantViewSet_all_bookings_bookings_with_wrong_status(
-    test_restaurant, test_owner, test_restaurant_table, test_user
-):
+def test_all_bookings_bookings_with_wrong_status(test_restaurant, test_owner, test_restaurant_table, test_user):
     """
     Our endpoint returns only bookings with status confirmed, completed and no show.In this create we create
     bookings with different status and expect that endpoint will not show us them
@@ -632,7 +626,7 @@ def test_RestaurantViewSet_all_bookings_bookings_with_wrong_status(
     assert len(response.data["all_bookings"]) == 0
 
 
-def test_RestaurantViewSet_all_bookings_invalid_date(test_restaurant, test_owner):
+def test_all_bookings_invalid_date(test_restaurant, test_owner):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.get(f"/api/restaurants/{test_restaurant.id}/all_bookings/?date=wrong-format")
@@ -640,8 +634,350 @@ def test_RestaurantViewSet_all_bookings_invalid_date(test_restaurant, test_owner
     assert response.data["error"] == "Invalid date format"
 
 
-def test_RestaurantViewSet_all_bookings_restaurant_not_found(test_owner):
+def test_all_bookings_restaurant_not_found(test_owner):
     client = APIClient()
     client.force_authenticate(test_owner)
     response = client.get("/api/restaurants/not_exist_id/")
     assert response.status_code == 404
+
+
+# Tests /api/restaurants/id/ban_user/
+@pytest.mark.parametrize(
+    "user_status, expected_status",
+    [
+        ("unauthorized_user", status.HTTP_401_UNAUTHORIZED),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+        ("staff", status.HTTP_403_FORBIDDEN),
+        ("manager", status.HTTP_201_CREATED),
+        ("owner", status.HTTP_201_CREATED),
+    ],
+)
+def test_ban_user_permissions(
+    user_status,
+    expected_status,
+    test_user_3,
+    test_membership_staff,
+    test_membership_manager,
+    test_owner,
+    test_restaurant,
+):
+    """
+    Only manager or owner of provided restaurant are allowed to ban users
+    """
+    client = APIClient()
+    if user_status == "unauthorized_user":
+        client.force_authenticate()
+    if user_status == "normal_user":
+        client.force_authenticate(test_user_3)
+    if user_status == "staff":
+        client.force_authenticate(test_membership_staff.user)
+    if user_status == "manager":
+        client.force_authenticate(test_membership_manager.user)
+    if user_status == "owner":
+        client.force_authenticate(test_owner)
+
+    body = {
+        "email": f"{test_user_3.email}",
+        "description": "test description",
+    }
+    response = client.post(f"/api/restaurants/{test_restaurant.id}/ban_user/", body)
+    assert response.status_code == expected_status
+    if expected_status == status.HTTP_201_CREATED:
+        assert RestaurantBan.objects.filter(
+            user=test_user_3, restaurant=test_restaurant, description=body["description"]
+        ).exists()
+
+
+def test_ban_user_not_exist_email(test_restaurant, test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+
+    body = {
+        "email": "not_exist_email",
+    }
+    response = client.post(f"/api/restaurants/{test_restaurant.id}/ban_user/", body)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["error"] == "User with provided email does not exist"
+
+
+def test_ban_user_missing_email(test_restaurant, test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "email": "",
+    }
+    response = client.post(f"/api/restaurants/{test_restaurant.id}/ban_user/", body)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == "Email is required"
+
+
+def test_ban_user_not_exist_restaurant(test_owner, test_user_3):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    body = {
+        "email": f"{test_user_3.email}",
+    }
+    response = client.post("/api/restaurants/not_exist_id/ban_user/", body)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# Tests /api/restaurants/id/unban_user/?email=..
+@pytest.mark.parametrize(
+    "user_status, expected_status",
+    [
+        ("unauthorized_user", status.HTTP_401_UNAUTHORIZED),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+        ("staff", status.HTTP_403_FORBIDDEN),
+        ("manager", status.HTTP_204_NO_CONTENT),
+        ("owner", status.HTTP_204_NO_CONTENT),
+    ],
+)
+def test_unban_user_permission(
+    user_status,
+    expected_status,
+    test_user_3,
+    test_membership_staff,
+    test_membership_manager,
+    test_owner,
+    test_restaurant,
+    test_ban_user,
+    test_restaurant_ban,
+):
+    """
+    In this test test_ban_user has been banned at test_restaurant and are attempting to unban them.
+    Only manager or owner of provided restaurant are allowed to unban users
+    """
+    client = APIClient()
+    if user_status == "unauthorized_user":
+        client.force_authenticate()
+    if user_status == "normal_user":
+        client.force_authenticate(test_user_3)
+    if user_status == "staff":
+        client.force_authenticate(test_membership_staff.user)
+    if user_status == "manager":
+        client.force_authenticate(test_membership_manager.user)
+    if user_status == "owner":
+        client.force_authenticate(test_owner)
+
+    response = client.delete(f"/api/restaurants/{test_restaurant.id}/unban_user/?email={test_ban_user.email}")
+    assert response.status_code == expected_status
+    if expected_status == status.HTTP_204_NO_CONTENT:
+        assert not RestaurantBan.objects.filter(id=test_restaurant_ban.id).exists()
+
+
+def test_unban_user_not_exist_restaurant(test_owner, test_restaurant_ban, test_ban_user):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete(f"/api/restaurants/not_exist_restaurant/unban_user/?email={test_ban_user.email}")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_unban_user_not_exist_email(test_owner, test_restaurant_ban, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete(f"/api/restaurants/{test_restaurant.id}/unban_user/?email=not_exist_email")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["error"] == "User with provided email does not exist"
+
+
+def test_unban_user_missing_email(test_restaurant, test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete(f"/api/restaurants/{test_restaurant.id}/unban_user/")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == "Email is required"
+
+
+def test_unban_user_ban_not_exist(test_owner, test_restaurant, test_user_1):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.delete(f"/api/restaurants/{test_restaurant.id}/unban_user/?email={test_user_1.email}")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["error"] == "Provided user does not have ban in the restaurant"
+
+
+# Tests /api/restaurants/id/list_bans/
+@pytest.mark.parametrize(
+    "user_status, expected_status",
+    [
+        ("unauthorized_user", status.HTTP_401_UNAUTHORIZED),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+        ("staff", status.HTTP_403_FORBIDDEN),
+        ("manager", status.HTTP_200_OK),
+        ("owner", status.HTTP_200_OK),
+    ],
+)
+def test_list_bans_permission(
+    user_status,
+    expected_status,
+    test_user_3,
+    test_membership_staff,
+    test_membership_manager,
+    test_owner,
+    test_restaurant,
+    test_restaurant_ban,
+):
+    """
+    Only manager or owner of provided restaurant are allowed check list all banned users.
+    """
+    client = APIClient()
+    if user_status == "unauthorized_user":
+        client.force_authenticate()
+    if user_status == "normal_user":
+        client.force_authenticate(test_user_3)
+    if user_status == "staff":
+        client.force_authenticate(test_membership_staff.user)
+    if user_status == "manager":
+        client.force_authenticate(test_membership_manager.user)
+    if user_status == "owner":
+        client.force_authenticate(test_owner)
+
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/list_bans/?page=1")
+    print(response.data)
+    assert response.status_code == expected_status
+
+    if expected_status == status.HTTP_200_OK:
+        # test_restaurant has only one ban "test_restaurant_ban"
+        assert len(response.data["results"]) == 1
+        assert response.data["results"][0]["id"] == test_restaurant_ban.id
+
+
+@pytest.mark.parametrize(
+    "ordering, expected_status",
+    [
+        ("created_at", status.HTTP_200_OK),
+        ("-created_at", status.HTTP_200_OK),
+        ("invalid_ordering", status.HTTP_400_BAD_REQUEST),
+    ],
+)
+def test_list_bans_ordering(ordering, expected_status, test_owner, test_restaurant, test_user_1, test_user_2):
+    """
+    In this test we create 2 RestaurantBan in our Restaurant and check whether our endpoint
+    show them in correct ordering.
+
+    Action list_bans allowed manger or owner to provide filed ordering in query_params.
+    Allowed ordering ("created_at", "-created_at") if user does not provide this filed default = "created_at"
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    ban_1 = RestaurantBan.objects.create(
+        user=test_user_1,
+        restaurant=test_restaurant,
+        description="test description 1",
+    )
+    ban_2 = RestaurantBan.objects.create(
+        user=test_user_2,
+        restaurant=test_restaurant,
+        description="test description 2",
+    )
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/list_bans/?ordering={ordering}")
+    assert response.status_code == expected_status
+    if expected_status == status.HTTP_200_OK:
+        # If field ordering = created_at ban_1 should be first because it has older date of creating
+        if ordering == "created_at":
+            assert response.data["results"][0]["id"] == ban_1.id
+            assert response.data["results"][1]["id"] == ban_2.id
+        # If field ordering = -created_at ban_2 should be first because it has earlier date of creating
+        if ordering == "-created_at":
+            assert response.data["results"][0]["id"] == ban_2.id
+            assert response.data["results"][1]["id"] == ban_1.id
+
+
+def test_list_bans_restaurant_not_exist(test_owner):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get("/api/restaurants/not_exist_restaurant/list_bans/")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_list_bans_returns_404_for_invalid_page(test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/list_bans/?page=invalid_page")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+# Tests /api/restaurants/id/check_user/?email=..
+@pytest.mark.parametrize(
+    "user_status, expected_status",
+    [
+        ("unauthorized_user", status.HTTP_401_UNAUTHORIZED),
+        ("normal_user", status.HTTP_403_FORBIDDEN),
+        ("staff", status.HTTP_403_FORBIDDEN),
+        ("manager", status.HTTP_200_OK),
+        ("owner", status.HTTP_200_OK),
+    ],
+)
+def test_check_user_permissions(
+    user_status,
+    expected_status,
+    test_user_3,
+    test_membership_staff,
+    test_membership_manager,
+    test_owner,
+    test_restaurant,
+):
+    """
+    In this test we ban test_user_3 and expect that endpoint display this ban only for owner and manager of
+    the restaurant on which this user jas been banned.
+    """
+    client = APIClient()
+    if user_status == "unauthorized_user":
+        client.force_authenticate()
+    if user_status == "normal_user":
+        client.force_authenticate(test_user_3)
+    if user_status == "staff":
+        client.force_authenticate(test_membership_staff.user)
+    if user_status == "manager":
+        client.force_authenticate(test_membership_manager.user)
+    if user_status == "owner":
+        client.force_authenticate(test_owner)
+
+    # Ban test_user_3
+    test_ban = RestaurantBan.objects.create(
+        user=test_user_3,
+        restaurant=test_restaurant,
+        description="test description",
+    )
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/check_user/?email={test_user_3.email}")
+    assert response.status_code == expected_status
+    # Check all ban details
+    if expected_status == status.HTTP_200_OK:
+        assert response.data["id"] == test_ban.id
+        assert response.data["user_email"] == test_ban.user.email
+        assert response.data["restaurant_name"] == test_ban.restaurant.name
+
+
+def test_check_user_missing_email(test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/check_user/")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["error"] == "Email is required"
+
+
+def test_check_user_not_exist_restaurant(test_owner, test_user_3):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/restaurants/not_exist_restaurant/check_user/?email={test_user_3.email}")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_check_user_not_exist_email(test_owner, test_restaurant):
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/check_user/?email=not_exist_email")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["error"] == "User with provided email does not exist"
+
+
+def test_check_user_return_404_for_user_without_ban(test_owner, test_restaurant, test_user_3):
+    """
+    In this test test_user_3 does not have ban at the restaurant.
+    So endpoint should return 404 because RestaurantBan object doesn't exist.
+    """
+    client = APIClient()
+    client.force_authenticate(test_owner)
+    response = client.get(f"/api/restaurants/{test_restaurant.id}/check_user/?email={test_user_3.email}")
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+    assert response.data["error"] == "Provided user does not have ban in the restaurant"

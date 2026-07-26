@@ -1,10 +1,13 @@
 from datetime import datetime, time, timedelta
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import QuerySet
+from rest_framework.exceptions import NotFound
 
+from accounts.models import CustomUser
 from booking_system.models import Booking
 from booking_system.services import searching_first_available_table
-from restaurants.models import Restaurant
+from restaurants.models import Restaurant, RestaurantBan
 
 
 def get_available_hours_per_day(restaurant: Restaurant, date: str, guests: int) -> list[str]:
@@ -88,3 +91,65 @@ def get_all_bookings_per_day(restaurant: Restaurant, date: str) -> QuerySet[Book
         ],
     ).order_by("start_time")
     return all_bookings
+
+
+def create_restaurant_ban(restaurant: Restaurant, email: str, description=None) -> None:
+    if not email:
+        raise ValueError("Email is required")
+    try:
+        user = CustomUser.objects.get(email=email)
+    except ObjectDoesNotExist:
+        raise NotFound("User with provided email does not exist")
+
+    RestaurantBan.objects.create(
+        restaurant=restaurant,
+        user=user,
+        description=description,
+    )
+
+
+def unban_user(restaurant: Restaurant, email: str) -> None:
+    """
+    Deletes RestaurantBan object with given user if it exists.
+    """
+    if not email:
+        raise ValueError("Email is required")
+    try:
+        user = CustomUser.objects.get(email=email)
+    except ObjectDoesNotExist:
+        raise NotFound("User with provided email does not exist")
+
+    try:
+        user_ban = RestaurantBan.objects.get(user=user, restaurant=restaurant)
+        user_ban.delete()
+    except ObjectDoesNotExist:
+        raise NotFound("Provided user does not have ban in the restaurant")
+
+
+def show_all_bans(restaurant: Restaurant, ordering=str) -> QuerySet[RestaurantBan]:
+    """
+    Returns list of all bans at provided restaurant.
+    User can also provide filed "ordering" (default = "created_at", allowed = "created_at", "-created_at"
+    """
+    if ordering not in ["created_at", "-created_at"]:
+        raise ValueError("Invalid ordering")
+
+    all_bans = RestaurantBan.objects.filter(restaurant=restaurant).order_by(f"{ordering}")
+    return all_bans
+
+
+def check_if_user_is_banned(restaurant: Restaurant, email: str) -> RestaurantBan:
+    """
+    Returns RestaurantBan object with given user if it exists.
+    """
+    if not email:
+        raise ValueError("Email is required")
+    try:
+        user = CustomUser.objects.get(email=email)
+    except ObjectDoesNotExist:
+        raise NotFound("User with provided email does not exist")
+    try:
+        user_ban = RestaurantBan.objects.get(user=user, restaurant=restaurant)
+    except ObjectDoesNotExist:
+        raise NotFound("Provided user does not have ban in the restaurant")
+    return user_ban
