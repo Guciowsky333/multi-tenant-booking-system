@@ -4,6 +4,12 @@ from accounts.models import CustomUser
 from accounts.validators import validate_passwords
 
 
+class AccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ["id", "first_name", "last_name", "email"]
+
+
 class SendVerificationCodeSerializer(serializers.Serializer):
     password = serializers.CharField()
     password_2 = serializers.CharField()

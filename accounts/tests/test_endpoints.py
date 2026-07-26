@@ -166,6 +166,28 @@ def test_LogoutAPIView_requires_authentication():
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
+# Test for /api/accounts/me/
+def test_MeView(test_user):
+    """
+    In this test checking if our endpoint correctly return details
+    about request_user
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_user)
+    response = client.get("/api/accounts/me/")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["id"] == test_user.id
+    assert response.data["first_name"] == test_user.first_name
+    assert response.data["last_name"] == test_user.last_name
+    assert response.data["email"] == test_user.email
+
+
+def test_MeView_requires_authentication():
+    client = APIClient()
+    response = client.get("/api/accounts/me/")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
 # Test for /api/accounts/change_password/
 
 

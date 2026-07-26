@@ -1,5 +1,6 @@
 # Create your views here.
 from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import status
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.serializers import (
+    AccountSerializer,
     ChangePasswordSerializer,
     CreateAccountSerializer,
     LogoutSerializer,
@@ -113,6 +115,28 @@ class CreateAccountAPIView(APIView):
                 },
                 status=400,
             )
+
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = AccountSerializer
+
+    @extend_schema(
+        summary="Get account details",
+        description="""
+        Returns account details about the currently logged in user.
+        
+        Business rules:
+        - Provided access token in header is required.
+        """,
+        responses={
+            200: OpenApiResponse(description="Account details"),
+            401: OpenApiResponse(description="Not authorized user"),
+        },
+    )
+    def get(self, request):
+        serializer = self.serializer_class(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class LogoutAPIView(APIView):
