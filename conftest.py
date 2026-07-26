@@ -1,4 +1,5 @@
 import pytest
+from django.core.cache import cache
 
 from accounts.models import CustomUser, VerificationCode
 from available_rules.models import AvailableRule, RestaurantBreak, RestaurantException, RestaurantTable
@@ -6,6 +7,11 @@ from booking_system.tests.test_endpoints import next_monday
 from memberships.models import MemberShip
 from restaurants.models import CuisineType, Restaurant, RestaurantBan
 from user_reviews.models import Review
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    cache.clear()
 
 
 @pytest.fixture
