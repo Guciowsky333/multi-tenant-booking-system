@@ -1,7 +1,7 @@
 # Create your views here.
 from datetime import datetime, timedelta
 
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
@@ -46,6 +46,32 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
             return BookingDetailsSerializer
         return BookingSerializer
 
+    @extend_schema(
+        summary="Create Booking object",
+        description="""
+        Checking for available table at provided restaurant in provided date and time.
+        If any table is available create Booking object with this table and provided data in body.
+        Sends confirmation email to user after booking is created. 
+        If user does not confirm within 30 minutes, the booking will be automatically cancelled
+        
+        Business rules:
+        - Fields (restaurant, date, start_time, guests) are required.
+        - Restaurant must exist and be open at provided date.
+        - Date cannot be in the past.
+        - Start_time must be consistent with opening hours at the restaurant.
+        - Start_time cannot overlap with restaurant break.
+        - Bookings at the same table cannot overlap each other.
+        - Guests must be greater than 0.
+        - Request user cannot have ban at provided restaurant.
+        - Request user must be authenticated. 
+        """,
+        request=BookingSerializer,
+        responses={
+            201: OpenApiResponse(description="Booking object created successfully"),
+            400: OpenApiResponse(description="Validation error"),
+            401: OpenApiResponse(description="User not authorized"),
+        },
+    )
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -77,6 +103,22 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        summary="Returns all request user's bookings",
+        description="""
+        Returns all request user's bookings sorted by date and time.
+        If user does not have any bookings returns empty query.
+        
+        Business rules:
+        - Request user must be authenticated.
+        - If user provided field page it must be int, exist and contain bookings (default page = 1) 
+        """,
+        responses={
+            200: OpenApiResponse(description="All user's bookings sorted by date and time"),
+            400: OpenApiResponse(description="Invalid page"),
+            401: OpenApiResponse(description="User not authorized"),
+        },
+    )
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         page = self.paginate_queryset(queryset)
@@ -100,6 +142,11 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
         parameters=[
             OpenApiParameter(name="token", required=True, description="confirmation_token of the booking"),
         ],
+        responses={
+            200: OpenApiResponse(description="Status changed successfully"),
+            400: OpenApiResponse(description="Invalid token/ Booking status is not PENDING"),
+            404: OpenApiResponse(description="Booking not found"),
+        },
     )
     @action(detail=False, methods=["patch"], url_path="status_confirmed", permission_classes=[AllowAny])
     def change_status_confirmed(self, request):
@@ -143,6 +190,13 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
         - Provided booking must exist.
         - Provided booking must has status "confirmed".
         """,
+        responses={
+            200: OpenApiResponse(description="Status changed successfully"),
+            400: OpenApiResponse(description="The reservation hasn't taken place yet/ Booking status is not CONFIRMED"),
+            404: OpenApiResponse(description="Booking not found"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
     )
     @action(
         detail=True,
@@ -170,6 +224,13 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
         change its status to cancelled at any time.
         - Status of the provided booking must be confirmed.
         """,
+        responses={
+            200: OpenApiResponse(description="Status changed successfully"),
+            400: OpenApiResponse(description="Too late/ Booking status is not CONFIRMED"),
+            404: OpenApiResponse(description="Booking not found"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
     )
     @action(
         detail=True,
@@ -197,6 +258,13 @@ class BookingViewSet(CreateModelMixin, RetrieveModelMixin, ListModelMixin, Gener
         - Booking date must be in the past. 
         - Status of the provided booking must be confirmed.
         """,
+        responses={
+            200: OpenApiResponse(description="Status changed successfully"),
+            400: OpenApiResponse(description="The reservation hasn't taken place yet/ Booking status is not CONFIRMED"),
+            404: OpenApiResponse(description="Booking not found"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
     )
     @action(
         detail=True,
