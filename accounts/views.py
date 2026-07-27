@@ -4,9 +4,11 @@ from rest_framework import status
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from accounts.serializers import (
     AccountSerializer,
@@ -24,6 +26,14 @@ from accounts.services import (
     reset_password,
     send_password_reset_code,
 )
+
+
+class LoginRateThrottle(AnonRateThrottle):
+    scope = "login"
+
+
+class ThrottledTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [LoginRateThrottle]
 
 
 class SendVerificationEmailView(APIView):
