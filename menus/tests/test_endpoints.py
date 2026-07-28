@@ -250,6 +250,16 @@ def test_MenuViewSet_retrieve_dishes_ordered_by_price(filters, test_user, test_m
         assert response.data["dishes"][1]["price"] == "35.00"
 
 
+def test_MenuViewSet_retrieve_dishes_invalid_ordering(test_user, test_menu):
+    """
+    Allowed ordering only by price or -price
+    """
+    client = APIClient()
+    client.force_authenticate(user=test_user)
+    response = client.get(f"/api/menus/{test_menu.id}/?ordering=name")
+    assert response.status_code == 400
+
+
 # Post method
 def test_MenuViewSet_post_owner_of_restaurant(test_owner, test_restaurant):
     """
