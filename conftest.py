@@ -119,6 +119,16 @@ def test_review_2(db, test_restaurant, test_user_1):
 
 
 @pytest.fixture
+def test_review_restaurant_1(db, test_restaurant_1, test_user):
+    return Review.objects.create(
+        user=test_user,
+        restaurant=test_restaurant_1,
+        rating=4,
+        comment="Test comment",
+    )
+
+
+@pytest.fixture
 def test_available_rule(db, test_restaurant, test_cuisine_type):
     return AvailableRule.objects.create(
         restaurant=test_restaurant,
