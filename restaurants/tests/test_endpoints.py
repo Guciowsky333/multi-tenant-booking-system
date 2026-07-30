@@ -128,6 +128,37 @@ def test_restaurant_average_rating_after_new_review(test_user_2, test_restaurant
     assert response.data["average_review_rating"] == 7
 
 
+@pytest.mark.parametrize("ordering", ["avg_rating", "-avg_rating", "anything else"])
+def test_restaurant_filter_by_average_review_rating(
+    ordering, test_user_2, test_restaurant, test_review_1, test_restaurant_1, test_review_restaurant_1
+):
+    """
+    In this test we check if endpoint correctly sorted restaurants  by "average_review_rating" when we use
+    "ordering" in query_params. We have 2 restaurants the first one with 1 review rating = 8 so average rating this restaurant
+    is 8 and second one with also 1 review rating = 4 so average rating this restaurant is 4
+    """
+    client = APIClient()
+    client.force_authenticate(test_user_2)
+    response = client.get(f"/api/restaurants/?ordering={ordering}")
+    assert response.status_code == 200
+    # if ordering is "-avg_rating" restaurants should be sorted from the highest rating to the lowest
+    if ordering == "-avg_rating":
+        assert response.data["results"][0]["id"] == test_restaurant.id
+        assert response.data["results"][0]["average_review_rating"] == 8
+        assert response.data["results"][1]["id"] == test_restaurant_1.id
+        assert response.data["results"][1]["average_review_rating"] == 4
+    # if ordering is "avg_rating" restaurants should be sorted from the lowest rating to the highest
+    if ordering == "avg_rating":
+        assert response.data["results"][0]["id"] == test_restaurant_1.id
+        assert response.data["results"][0]["average_review_rating"] == 4
+        assert response.data["results"][1]["id"] == test_restaurant.id
+        assert response.data["results"][1]["average_review_rating"] == 8
+    # If ordering is anything other than "avg_rating" or "-avg_rating" endpoint should sort restaurants by id
+    if ordering == "anything else":
+        assert response.data["results"][0]["id"] == test_restaurant.id
+        assert response.data["results"][1]["id"] == test_restaurant_1.id
+
+
 def test_RestaurantViewSet_get_filter_by_city(test_user_1, test_restaurant):
     client = APIClient()
     client.force_authenticate(test_user_1)

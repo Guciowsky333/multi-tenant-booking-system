@@ -2,7 +2,8 @@ from datetime import date
 from urllib.parse import urlencode
 
 from django.core.cache import cache
-from django.db.models import Prefetch
+from django.db.models import Avg, FloatField, Prefetch, Value
+from django.db.models.functions import Coalesce
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status, viewsets
@@ -146,19 +147,44 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         },
     )
     def list(self, request, *args, **kwargs):
+
         params = request.query_params
+        mutable_params = params.copy()
+
+        allowed_filters = ["city", "city__icontains", "cuisine_type", "reservation_duration_minutes", "ordering"]
+
+        # If any param is not in allowed_filters we do not save it in cache as cache_key
+        for param in list(mutable_params.keys()):
+            if param not in allowed_filters:
+                mutable_params.pop(param)
+
+        ordering = request.query_params.get("ordering")
+        # If field "ordering" is anything other than "avg_rating" or "-avg_rating" sets it as "id"
+        if ordering not in ["avg_rating", "-avg_rating"]:
+            mutable_params.pop("ordering", None)
+            ordering = "id"
 
         # Sorting parms because order of filters does not matter in cache key
-        sorted_parms = urlencode(sorted(params.items()))
+        sorted_parms = urlencode(sorted(mutable_params.items()))
 
         cache_key = "restaurants_all" if not sorted_parms else f"restaurants_all_{sorted_parms}"
 
         # If data are in Redis we take them form there
         data = cache.get(cache_key)
 
+        # If data are not in Redis we take them from database and then save them to Redis for 5 minutes
         if data is None:
-            # If data are not in Redis we take them from database and then save them to Redis for 5 minutes
-            queryset = self.filter_queryset(self.get_queryset())
+            queryset = self.get_queryset()
+            # orders queryset by avg_rating if provided, if not orders by id
+            if ordering in ["avg_rating", "-avg_rating"]:
+                queryset = queryset.annotate(
+                    avg_rating=Coalesce(
+                        Avg("reviews__rating"),
+                        Value(0),
+                        output_field=FloatField(),
+                    )
+                )
+            queryset = self.filter_queryset(queryset.order_by(ordering))
             page = self.paginate_queryset(queryset)
             serializer = self.get_serializer(page, many=True)
 
