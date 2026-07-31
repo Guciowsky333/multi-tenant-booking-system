@@ -177,6 +177,19 @@ def test_ReviewViewSet_patch_return_404_for_not_owner(test_user, test_restaurant
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+def test_ReviewViewSet_patch_changing_restaurant(test_user, test_restaurant, test_review_1, test_restaurant_1):
+    """
+    User cannot change the restaurant of the review.
+    """
+    client = APIClient()
+    client.force_authenticate(test_user)
+    body = {
+        "restaurant": test_restaurant_1.id,
+    }
+    response = client.patch(f"/api/user_reviews/{test_review_1.id}/", body)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
 def test_ReviewViewSet_patch_requires_authentication():
     client = APIClient()
     response = client.patch("/api/user_reviews/", {})

@@ -10,7 +10,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -71,7 +71,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_class = RestaurantFilter
     serializer_class = RestaurantSerializer
-    parser_classes = [FormParser, MultiPartParser]
+    parser_classes = [JSONParser, FormParser, MultiPartParser]
     pagination_class = RestaurantPagination
 
     def get_permissions(self):
@@ -119,6 +119,36 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         # Cleaning Redis if someone deleted his restaurant
         cache.delete_pattern("restaurants_all*")
 
+    @extend_schema(
+        summary="Shows all available restaurants",
+        description="""
+        Shows all available restaurants with provided filters.
+        If user provides a filter that does not exist, it is ignored and all restaurants are returned.
+
+        Business rules:
+        - Allowed filters: (city, city__icontains, cuisine_type, reservation_duration_minutes).
+        - Allowed ordering: "avg_rating", "-avg_rating" if user provided anything else restaurants will
+        be sorted by "id"
+        - If user provided page it must exist and contains restaurants.
+        - Request user must be authenticated.
+        """,
+        parameters=[
+            OpenApiParameter(name="city", required=False, description="The city where the restaurant is located"),
+            OpenApiParameter(name="cuisine_type", required=False, description="The cuisine type of the restaurant"),
+            OpenApiParameter(
+                name="reservation_duration_minutes", required=False, description="Reservation duration minutes"
+            ),
+            OpenApiParameter(name="ordering", required=False, description="The ordering of the restaurants"),
+        ],
+        responses={
+            200: OpenApiResponse(description="All available restaurants."),
+            400: OpenApiResponse(
+                description="Invalid data in a recognized filter, for instance a string value in reservation_duration_minutes"
+            ),
+            401: OpenApiResponse(description="User is not authenticated"),
+            404: OpenApiResponse(description="Internal page"),
+        },
+    )
     def list(self, request, *args, **kwargs):
 
         params = request.query_params
@@ -173,6 +203,22 @@ class RestaurantViewSet(viewsets.ModelViewSet):
 
         return Response(data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Returns all reviews for provided restaurant",
+        description="""
+        Returns all reviews for provided restaurant.
+        
+        Business rules:
+        - Restaurant must exist.
+        - Request user must be authenticated.
+        - If user provided page it must exist and contains reviews.
+        """,
+        responses={
+            200: OpenApiResponse(description="All reviews for provided restaurant."),
+            401: OpenApiResponse(description="User is not authenticated"),
+            404: OpenApiResponse(description="Invalid page/ Restaurant not found"),
+        },
+    )
     @action(detail=True, methods=["get"], url_path="reviews")
     def reviews(self, request, pk=None):
         page_number = request.query_params.get("page", 1)
@@ -195,6 +241,29 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             cache.set(cache_key, data, timeout=300)
         return Response(data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        summary="Returns all available hours per day.",
+        description="""
+        Returns all available hours when user can make a booking at provided day
+        with provided amount of people (guests).
+
+        Business rules:
+        - Fields (date, guests) are required.
+        - Date must be in format YYYY-MM-DD.
+        - Restaurant must exist.
+        - Request user must be authenticated.
+        """,
+        parameters=[
+            OpenApiParameter(name="date", required=True, description="Date that user want to check"),
+            OpenApiParameter(name="guests", required=True, description="Number of guests"),
+        ],
+        responses={
+            200: OpenApiResponse(description="All available hours per day."),
+            401: OpenApiResponse(description="User is not authenticated"),
+            400: OpenApiResponse(description="Validation error"),
+            404: OpenApiResponse(description="Restaurant not found"),
+        },
+    )
     @action(detail=True, methods=["get"], url_path="available_hours")
     def available_hours_per_day(self, request, pk=None):
         provided_date = request.query_params.get("date")
@@ -211,9 +280,33 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+    @extend_schema(
+        summary="Returns all bookings at provided date.",
+        description="""
+        Returns all bookings at provided date with status confirmed, completed or no_show.
+        This endpoint is allowed only for members of provided restaurant for tracking 
+        the schedule at provided date.
+        
+        Business rules:
+        - If the user does not provide a date, the endpoint returns all bookings for the current day.
+        - Date must be in format YYYY-MM-DD.
+        - Restaurant must exist.
+        - Request user must be authenticated.
+        - Request user has to be member or owner of provided restaurant.
+        """,
+        parameters=[
+            OpenApiParameter(name="date", required=False, description="Date that user want to check"),
+        ],
+        responses={
+            200: OpenApiResponse(description="All bookings at provided date."),
+            400: OpenApiResponse(description="Validation error"),
+            404: OpenApiResponse(description="Restaurant not found"),
+            403: OpenApiResponse(description="User does not have permission to access this endpoint"),
+            401: OpenApiResponse(description="User is not authorized"),
+        },
+    )
     @action(detail=True, methods=["get"], url_path="all_bookings")
     def all_bookings_per_day(self, request, pk=None):
-
         provided_date = request.query_params.get("date", str(date.today()))
         try:
             all_bookings = get_all_bookings_per_day(self.get_object(), provided_date)

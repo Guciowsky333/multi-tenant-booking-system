@@ -23,6 +23,9 @@ class MenuSerializer(serializers.ModelSerializer):
 
     def get_dishes(self, obj):
         ordering = self.context["request"].query_params.get("ordering", "price")
+        if ordering not in ["price", "-price"]:
+            raise serializers.ValidationError("Invalid ordering")
+
         dishes = obj.dishes.order_by(ordering)
         serializer = DishSerializer(dishes, many=True)
         return serializer.data

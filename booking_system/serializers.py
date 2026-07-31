@@ -23,7 +23,7 @@ class BookingSerializer(serializers.ModelSerializer):
         ]
 
         # User is taken in view and table is automatically assigned in function "create_booking" during post method
-        read_only_fields = ["user", "table"]
+        read_only_fields = ["user", "table", "status"]
 
     def validate_date(self, date):
         if date < date.today():

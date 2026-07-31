@@ -25,3 +25,8 @@ class ReviewSerializer(serializers.ModelSerializer):
             if Review.objects.filter(restaurant=restaurant, user=user).exists():
                 raise serializers.ValidationError("You already have writen a review of this restaurant")
         return data
+
+    def validate_restaurant(self, value):
+        if self.instance and self.instance.restaurant != value:
+            raise serializers.ValidationError("Cannot change restaurant of an existing review")
+        return value

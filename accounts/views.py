@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -34,6 +35,21 @@ class LoginRateThrottle(AnonRateThrottle):
 
 class ThrottledTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [LoginRateThrottle]
+
+    @extend_schema(
+        summary="Returns access and refresh tokens",
+        description="""
+        Returns access and refresh tokens for an account if credentials are valid.
+        """,
+        request=TokenObtainPairSerializer,
+        responses={
+            200: OpenApiResponse(description="Access and refresh tokens"),
+            401: OpenApiResponse(description="Invalid credentials"),
+            429: OpenApiResponse(description="Too Many Requests in this endpoint max per minute = 5"),
+        },
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
 
 
 class SendVerificationEmailView(APIView):

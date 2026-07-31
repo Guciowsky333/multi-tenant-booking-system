@@ -5,7 +5,7 @@ from menus.models import Menu
 from restaurants.models import Restaurant
 
 
-class IsRestaurantOwnerOrManager(permissions.BasePermission):
+class MenuAndDishPermission(permissions.BasePermission):
     """
     This permission applies to both DishViewSet and MenuViewSet.
     Only owner or manager of the restaurant can create, update or delete menus or dishes inside restaurant
