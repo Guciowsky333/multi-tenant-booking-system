@@ -126,7 +126,9 @@ class RestaurantViewSet(viewsets.ModelViewSet):
         If user provides a filter that does not exist, it is ignored and all restaurants are returned.
 
         Business rules:
-        - Allowed filters: (city, cuisine_type, reservation_duration_minutes).
+        - Allowed filters: (city, city__icontains, cuisine_type, reservation_duration_minutes).
+        - Allowed ordering: "avg_rating", "-avg_rating" if user provided anything else restaurants will
+        be sorted by "id"
         - If user provided page it must exist and contains restaurants.
         - Request user must be authenticated.
         """,
@@ -136,6 +138,7 @@ class RestaurantViewSet(viewsets.ModelViewSet):
             OpenApiParameter(
                 name="reservation_duration_minutes", required=False, description="Reservation duration minutes"
             ),
+            OpenApiParameter(name="ordering", required=False, description="The ordering of the restaurants"),
         ],
         responses={
             200: OpenApiResponse(description="All available restaurants."),
