@@ -127,6 +127,9 @@ POSTGRES_HOST=db
 POSTGRES_PORT=5432
 
 REDIS_URL=redis://redis:6379/0
+
+EMAIL_HOST_USER=your_email@gmail.com
+EMAIL_HOST_PASSWORD=your_gmail_app_password
 ```
 ### 3. Run the application using Docker Compose
 ```bash
